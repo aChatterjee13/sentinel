@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block page_title %}Registry{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h2 class="font-semibold text-slate-900">Model registry</h2>
+    <p class="text-xs text-slate-500 mt-1">active model: <span class="font-mono">{{ data.active_model }}</span></p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {% for m in data.models %}
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <div class="flex items-center justify-between">
+          <div class="font-semibold">{{ m.name }}</div>
+          <span class="text-xs text-slate-500">{{ m.versions|length }} versions</span>
+        </div>
+        {% if m.latest %}
+          <div class="text-xs text-slate-500 mt-1">latest: <span class="font-mono">v{{ m.latest }}</span></div>
+        {% endif %}
+        <div class="flex flex-wrap gap-1 mt-3">
+          {% for v in m.versions %}
+            <a href="/registry/{{ m.name }}/{{ v }}"
+               class="px-2 py-0.5 text-xs rounded border border-slate-200 hover:bg-slate-50 font-mono">v{{ v }}</a>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div class="col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center text-sm text-slate-400">
+        no registered models
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

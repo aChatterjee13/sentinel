@@ -1,0 +1,127 @@
+version: "1.0"
+
+# ─────────────────────────────────────────────────────────────────────
+# DEMO CONFIG — E-commerce retailer, product recommendation model
+# Playbook D: The growth-focused e-commerce optimizer
+#
+# Talking points for this config:
+#   - Beyond-accuracy metrics that reco vendors don't ship
+#     (coverage, diversity, novelty, popularity bias)
+#   - Long-tail collapse alerting — catches the silent killer
+#   - Group fairness across user segments (regulator-ready)
+#   - A/B test integration with revenue guardrails
+#   - Cold-start ratio tracked alongside catalogue refresh
+# ─────────────────────────────────────────────────────────────────────
+
+model:
+  name: product_reco_homepage
+  type: ranking
+  framework: implicit
+  version: "5.0.3"
+  domain: recommendation
+  description: "Homepage product recommendations — collaborative filtering + content"
+
+drift:
+  data:
+    method: js_divergence
+    threshold: 0.1
+    window: 7d
+
+domains:
+  recommendation:
+    model_type: hybrid
+    item_id_field: product_id
+    user_id_field: user_id
+    interaction_types: [click, purchase, add_to_cart, wishlist_add]
+    drift:
+      item_distribution:
+        track_cold_start_ratio: true
+        long_tail_ratio_threshold: 0.3      # alert if top-1% items > 70% of recommendations
+        catalogue_change_window: 7d
+        threshold: 0.1
+      user_distribution:
+        segment_field: user_segment
+        interaction_pattern_window: 14d
+        threshold: 0.1
+    quality:
+      ranking_metrics: [ndcg_at_10, map_at_10, mrr]
+      beyond_accuracy:
+        coverage:
+          min_threshold: 0.4                # at least 40% of catalogue surfaces
+        diversity:
+          method: intra_list_similarity
+          min_threshold: 0.3
+        novelty:
+          method: inverse_popularity
+          track_trend: true
+        serendipity:
+          enabled: true
+          weight: 0.15
+        popularity_bias:
+          method: gini_coefficient
+          max_threshold: 0.8
+      fairness:
+        protected_attribute: user_segment
+        metric: ndcg_at_10
+        max_disparity: 0.10               # max 10% NDCG gap across segments
+    ab_testing:
+      integration: optimizely
+      guardrail_metrics: [revenue_per_session, engagement_rate, return_rate]
+
+cost_monitor:
+  track:
+    - inference_latency_ms
+    - throughput_rps
+    - cost_per_prediction
+  alert_thresholds:
+    latency_p99_ms: 100               # homepage = strict latency budget
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#recsys-alerts"
+    - type: teams
+      webhook_url: ${TEAMS_WEBHOOK_URL}
+  policies:
+    cooldown: 1h
+    rate_limit_per_hour: 30
+
+retraining:
+  trigger: scheduled
+  schedule: "0 2 * * *"               # nightly at 02:00
+  pipeline: azureml://pipelines/retrain_homepage_reco
+  approval:
+    mode: auto
+    auto_promote_if:
+      metric: ndcg_at_10
+      improvement_pct: 1.0
+  validation:
+    holdout_dataset: az://baselines/homepage_reco_holdout.parquet
+
+deployment:
+  strategy: canary
+  canary:
+    initial_traffic_pct: 10
+    ramp_steps: [10, 30, 60, 100]
+    ramp_interval: 2h
+    rollback_on:
+      revenue_drop_pct: 0.03            # rollback if revenue per session drops > 3%
+      engagement_drop_pct: 0.05
+  target: azure_ml_endpoint
+
+business_kpi:
+  mappings:
+    - model_metric: ndcg_at_10
+      business_kpi: revenue_per_session
+    - model_metric: coverage
+      business_kpi: catalogue_engagement_rate
+    - model_metric: diversity
+      business_kpi: repeat_visitor_rate
+
+audit:
+  storage: local
+  path: ./demo/audit/ecommerce/
+  retention_days: 730                   # 2 years
+  log_predictions: false                # high volume — sample only
+  compliance_frameworks: [eu_ai_act, gdpr]

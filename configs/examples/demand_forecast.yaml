@@ -1,0 +1,69 @@
+version: "1.0"
+
+# Time series example: daily demand forecasting with weekly + yearly seasonality.
+# Uses calendar-aware drift, STL decomposition monitoring, and per-horizon
+# forecast quality tracking.
+
+model:
+  name: demand_forecast_v3
+  type: forecasting
+  framework: prophet
+  version: "3.1.0"
+  domain: timeseries
+  baseline_dataset: s3://sentinel-demo/baseline/demand_history.parquet
+
+drift:
+  data:
+    method: ks
+    threshold: 0.1
+    window: 30d
+
+domains:
+  timeseries:
+    frequency: daily
+    seasonality_periods: [7, 365]
+    decomposition: stl
+    drift:
+      method: calendar_test
+      compare_against: same_period
+      stationarity_check: true
+      adf_significance: 0.05
+      season_period: 7
+      threshold: 0.15
+    quality:
+      metrics: [mase, coverage, directional_accuracy]
+      prediction_interval: 0.95
+      coverage_alert_threshold: 0.85
+      horizon_tracking: [1, 7, 14, 30]
+    decomposition_monitoring:
+      trend_slope_change_threshold: 0.1
+      seasonal_amplitude_change_pct: 20
+      residual_variance_increase_pct: 30
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#forecasting-alerts"
+  policies:
+    cooldown: 4h
+
+retraining:
+  trigger: scheduled
+  schedule: "0 3 * * 1"  # weekly Monday 03:00
+  approval:
+    mode: auto
+  validation:
+    min_performance:
+      mase: 0.9
+
+deployment:
+  strategy: shadow
+  shadow:
+    duration: 168h
+    log_predictions: true
+
+audit:
+  storage: local
+  path: ./audit/demand_forecast/
+  retention_days: 1095

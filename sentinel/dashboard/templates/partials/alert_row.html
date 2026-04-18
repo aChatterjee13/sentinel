@@ -1,0 +1,11 @@
+{% for a in alerts %}
+  <div class="px-5 py-3 text-sm flex items-start gap-3">
+    <div class="text-xs text-slate-400 w-44 shrink-0">{{ a.timestamp }}</div>
+    <div class="flex-1">
+      <div class="font-mono text-xs text-slate-700">{{ a.title or a.event_type }}</div>
+      <div class="text-xs text-slate-500">{{ a.severity or 'info' }} · {{ a.model_name or '-' }}</div>
+    </div>
+  </div>
+{% else %}
+  <div class="px-5 py-6 text-sm text-slate-400 text-center">no alerts</div>
+{% endfor %}

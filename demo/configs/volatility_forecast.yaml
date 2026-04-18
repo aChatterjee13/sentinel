@@ -1,0 +1,124 @@
+version: "1.0"
+
+# ─────────────────────────────────────────────────────────────────────
+# DEMO CONFIG — Asset manager, equity volatility forecasting model
+# Playbook F: The quant / asset manager
+#
+# Talking points for this config:
+#   - Calendar-aware drift — January vs January, not January vs July
+#   - STL decomposition monitoring (trend / seasonal / residual)
+#   - Stationarity tests (ADF) flag regime changes
+#   - Per-horizon quality (1d, 5d, 22d, 63d) — knows where the model breaks
+#   - SR 11-7 model risk management framework — full lineage, full audit
+#   - Champion-challenger comparison on holdout, no auto-promote
+# ─────────────────────────────────────────────────────────────────────
+
+model:
+  name: equity_vol_forecast
+  type: forecasting
+  framework: prophet
+  version: "4.2.0"
+  domain: timeseries
+  description: "Daily equity volatility forecast — multi-horizon, EU+US books"
+
+drift:
+  data:
+    method: ks
+    threshold: 0.1
+    window: 30d
+
+domains:
+  timeseries:
+    frequency: daily
+    seasonality_periods: [5, 22, 252]   # weekly, monthly, yearly trading days
+    decomposition: stl
+    drift:
+      method: calendar_test
+      compare_against: same_period       # Jan 2026 vs Jan 2025
+      stationarity_check: true
+      adf_significance: 0.05
+      season_period: 5
+      threshold: 0.15
+    quality:
+      metrics: [mase, coverage, directional_accuracy, winkler]
+      prediction_interval: 0.95
+      coverage_alert_threshold: 0.85
+      horizon_tracking: [1, 5, 22, 63]   # 1d, 1w, 1m, 1q
+    decomposition_monitoring:
+      trend_slope_change_threshold: 0.10
+      seasonal_amplitude_change_pct: 25
+      residual_variance_increase_pct: 30
+
+feature_health:
+  importance_method: shap
+  alert_on_top_n_drift: 3
+  recalculate_importance: weekly
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#quant-model-alerts"
+    - type: email
+      to: [model-risk@assetmgr.example, quant-research@assetmgr.example]
+  policies:
+    cooldown: 4h
+    rate_limit_per_hour: 20
+    escalation:
+      - after: 0m
+        channels: [slack]
+        severity: [warning, high, critical]
+      - after: 2h
+        channels: [slack, email]
+        severity: [high, critical]
+
+retraining:
+  trigger: drift_confirmed
+  pipeline: azureml://pipelines/retrain_equity_vol
+  approval:
+    mode: human_in_loop                  # SR 11-7 — never auto-promote
+    approvers: [model-risk@assetmgr.example, quant-research@assetmgr.example]
+    timeout: 72h
+  validation:
+    holdout_dataset: az://baselines/equity_vol_holdout.parquet
+    min_performance:
+      mase: 0.85
+      coverage_95: 0.90
+
+deployment:
+  strategy: shadow                       # quant models always shadow first
+  shadow:
+    duration: 336h                       # 14 days of paper-trading parity
+    log_predictions: true
+
+cost_monitor:
+  track:
+    - inference_latency_ms
+    - cost_per_prediction
+  alert_thresholds:
+    latency_p99_ms: 500
+
+business_kpi:
+  mappings:
+    - model_metric: directional_accuracy
+      business_kpi: hedge_effectiveness
+    - model_metric: coverage
+      business_kpi: risk_limit_breach_rate
+
+audit:
+  storage: local
+  path: ./demo/audit/quant/
+  retention_days: 2555                   # 7 years — model risk management
+  log_predictions: true
+  log_explanations: true
+  compliance_frameworks: [sr_11_7, pra_ss1_23, eu_ai_act]
+
+model_graph:
+  dependencies:
+    - upstream: market_data_pipeline
+      downstream: equity_vol_forecast
+    - upstream: equity_vol_forecast
+      downstream: var_engine
+    - upstream: equity_vol_forecast
+      downstream: hedge_optimiser
+  cascade_alerts: true

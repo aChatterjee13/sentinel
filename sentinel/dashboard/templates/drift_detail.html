@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block page_title %}Drift report{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="flex items-center gap-2 text-sm">
+    <a href="/drift" class="text-sentinel-600 hover:underline">← drift</a>
+    <span class="text-slate-300">/</span>
+    <span class="font-mono text-xs text-slate-700">{{ report.report_id }}</span>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Severity</div>
+        <div class="text-lg font-semibold mt-1 flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-full
+            {% if report.severity == 'critical' %}bg-red-500
+            {% elif report.severity == 'high' %}bg-orange-500
+            {% elif report.severity == 'medium' %}bg-amber-500
+            {% else %}bg-emerald-500{% endif %}"></span>
+          {{ report.severity }}
+        </div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Test statistic</div>
+        <div class="text-lg font-semibold mt-1">{{ "%.4f"|format(report.test_statistic) }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">P-value</div>
+        <div class="text-lg font-semibold mt-1">{{ "%.4f"|format(report.p_value) if report.p_value is not none else "—" }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Drifted</div>
+        <div class="text-lg font-semibold mt-1">
+          {% if report.is_drifted %}
+            <span class="text-red-600">yes</span>
+          {% else %}
+            <span class="text-emerald-600">no</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="text-xs text-slate-500 mt-4">
+      detector: <span class="font-mono">{{ report.detector }}</span>
+      · timestamp: {{ report.timestamp }}
+      · features: {{ report.feature_scores|length }}
+    </div>
+  </div>
+
+  <!-- Per-feature drift score chart -->
+  {% if report.feature_scores_sorted %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h2 class="font-semibold text-slate-900 mb-2">Feature drift scores</h2>
+    <p class="text-xs text-slate-500 mb-3">Features exceeding the threshold are shown in red</p>
+    <div class="h-80" data-chart="drift-feature-scores" data-url="/api/drift/{{ report.report_id }}"></div>
+  </div>
+  {% endif %}
+
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="px-5 py-3 border-b border-slate-200">
+      <h2 class="font-semibold text-slate-900">Per-feature drift scores</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+          <tr>
+            <th class="text-left px-5 py-2">Feature</th>
+            <th class="text-right px-5 py-2">Score</th>
+            <th class="text-left px-5 py-2"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for name, score in report.feature_scores_sorted %}
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-5 py-2 font-mono text-xs">{{ name }}</td>
+              <td class="px-5 py-2 text-right {{ 'text-red-600 font-medium' if score > 0.2 else '' }}">{{ "%.4f"|format(score) }}</td>
+              <td class="px-5 py-2 w-1/2">
+                <div class="w-full bg-slate-100 rounded h-2">
+                  <div class="h-2 rounded {{ 'bg-red-500' if score > 0.2 else 'bg-sentinel-500' }}" style="width: {{ (score * 100)|round(1) if score < 1 else 100 }}%"></div>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

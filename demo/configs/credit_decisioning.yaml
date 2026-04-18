@@ -1,0 +1,146 @@
+version: "1.0"
+
+# ─────────────────────────────────────────────────────────────────────
+# DEMO CONFIG — UK retail bank, credit decisioning model
+# Playbook A: The regulated UK retail bank
+#
+# Talking points for this config:
+#   - 40 lines of YAML define the entire governance model
+#   - FCA Consumer Duty + PRA SS1/23 ready out of the box
+#   - 7-year audit retention is the default (regulatory requirement)
+#   - Auto-rollback on canary metric breach
+# ─────────────────────────────────────────────────────────────────────
+
+model:
+  name: credit_decisioning_v3
+  type: classification
+  framework: xgboost
+  version: "3.2.1"
+  domain: tabular
+  description: "Retail credit decisioning model — UK personal loans book"
+
+data_quality:
+  schema:
+    enforce: true
+  freshness:
+    max_age_hours: 24
+  outlier_detection:
+    method: isolation_forest
+    contamination: 0.05
+  null_threshold: 0.05
+  duplicate_threshold: 0.02
+
+drift:
+  data:
+    method: psi
+    threshold: 0.2
+    window: 7d
+    reference: baseline
+    features:
+      include: all
+      exclude: [application_id, timestamp, customer_id]
+  concept:
+    method: ddm
+    warning_level: 2.0
+    drift_level: 3.0
+    min_samples: 200
+    requires_actuals: true
+  model:
+    metrics: [accuracy, f1, auc]
+    threshold:
+      accuracy: 0.05
+      f1: 0.08
+      auc: 0.05
+    evaluation_window: 1000
+
+feature_health:
+  importance_method: shap
+  alert_on_top_n_drift: 3
+  recalculate_importance: weekly
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#credit-ml-alerts"
+    - type: teams
+      webhook_url: ${TEAMS_WEBHOOK_URL}
+    - type: pagerduty
+      routing_key: ${PD_ROUTING_KEY}
+      severity_mapping:
+        critical: critical
+        high: error
+  policies:
+    cooldown: 1h
+    rate_limit_per_hour: 30
+    escalation:
+      - after: 0m
+        channels: [slack]
+        severity: [warning, high, critical]
+      - after: 30m
+        channels: [slack, teams]
+        severity: [high, critical]
+      - after: 2h
+        channels: [slack, teams, pagerduty]
+        severity: [critical]
+
+retraining:
+  trigger: drift_confirmed
+  pipeline: azureml://pipelines/retrain_credit_decisioning
+  approval:
+    mode: human_in_loop
+    approvers: [model-risk@bank.example, ml-platform@bank.example]
+    auto_promote_if:
+      metric: auc
+      improvement_pct: 1.5
+    timeout: 48h
+  validation:
+    holdout_dataset: az://baselines/credit_decisioning_holdout.parquet
+    min_performance:
+      accuracy: 0.86
+      f1: 0.82
+      auc: 0.88
+
+deployment:
+  strategy: canary
+  canary:
+    initial_traffic_pct: 5
+    ramp_steps: [5, 25, 50, 100]
+    ramp_interval: 1h
+    rollback_on:
+      error_rate_increase: 0.02
+      latency_p99_increase_ms: 50
+  target: azure_ml_endpoint
+
+cost_monitor:
+  track:
+    - inference_latency_ms
+    - throughput_rps
+    - cost_per_prediction
+  alert_thresholds:
+    latency_p99_ms: 200
+
+business_kpi:
+  mappings:
+    - model_metric: precision
+      business_kpi: bad_loan_avoidance_rate
+    - model_metric: recall
+      business_kpi: approved_application_rate
+
+audit:
+  storage: local
+  path: ./demo/audit/bank/
+  retention_days: 2555  # 7 years — FCA Consumer Duty
+  log_predictions: true
+  log_explanations: true
+  compliance_frameworks: [fca_consumer_duty, pra_ss1_23]
+
+model_graph:
+  dependencies:
+    - upstream: feature_engineering_pipeline
+      downstream: credit_decisioning_v3
+    - upstream: credit_decisioning_v3
+      downstream: pricing_engine
+    - upstream: credit_decisioning_v3
+      downstream: collections_priority
+  cascade_alerts: true

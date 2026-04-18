@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block page_title %}Overview{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <!-- KPI cards row -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 card-hover">
+      <div class="text-xs uppercase tracking-wider text-slate-500">Model</div>
+      <div class="text-xl font-semibold mt-1">{{ data.status.model }}</div>
+      <div class="text-xs text-slate-500 mt-1">v{{ data.status.version or '—' }} · {{ data.status.domain }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 card-hover">
+      <div class="text-xs uppercase tracking-wider text-slate-500">Buffer</div>
+      <div class="text-xl font-semibold mt-1">{{ data.status.buffer }}</div>
+      <div class="text-xs text-slate-500 mt-1">predictions logged</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 card-hover">
+      <div class="text-xs uppercase tracking-wider text-slate-500">Drift baseline</div>
+      <div class="text-xl font-semibold mt-1">{{ "fitted" if data.status.drift_fitted else "not fitted" }}</div>
+      <div class="text-xs text-slate-500 mt-1">
+        {% if data.latest_drift %}
+          <span class="inline-block w-2 h-2 rounded-full mr-1
+            {% if data.latest_drift.severity == 'critical' %}bg-red-500
+            {% elif data.latest_drift.severity == 'high' %}bg-orange-500
+            {% elif data.latest_drift.severity == 'medium' %}bg-amber-500
+            {% else %}bg-emerald-500{% endif %}"></span>
+          severity {{ data.latest_drift.severity }}
+        {% else %}no recent reports{% endif %}
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 card-hover">
+      <div class="text-xs uppercase tracking-wider text-slate-500">Layers</div>
+      <div class="text-sm mt-1 space-y-1">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 status-pulse"></span>
+          MLOps: <span class="text-emerald-600 font-medium">on</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.llmops_enabled else 'bg-slate-300' }}"></span>
+          LLMOps: <span class="{{ 'text-emerald-600 font-medium' if data.llmops_enabled else 'text-slate-400' }}">{{ "on" if data.llmops_enabled else "off" }}</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.agentops_enabled else 'bg-slate-300' }}"></span>
+          AgentOps: <span class="{{ 'text-emerald-600 font-medium' if data.agentops_enabled else 'text-slate-400' }}">{{ "on" if data.agentops_enabled else "off" }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI report (if available) -->
+  {% if data.kpi_report and data.kpi_report.linked_kpis %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h2 class="font-semibold text-slate-900 mb-3">Business KPI Summary</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {% for link in data.kpi_report.linked_kpis[:4] %}
+      <div class="p-3 bg-slate-50 rounded-lg">
+        <div class="text-xs uppercase tracking-wider text-slate-500">{{ link.business_kpi }}</div>
+        <div class="text-lg font-semibold mt-1">{{ link.kpi_value if link.kpi_value is not none else '—' }}</div>
+        <div class="text-xs text-slate-400 mt-1">{{ link.model_metric }}: {{ link.metric_value if link.metric_value is not none else '—' }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+      <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+        <h2 class="font-semibold text-slate-900">Recent audit events</h2>
+        <a href="/audit" class="text-xs text-sentinel-600 hover:underline">view all →</a>
+      </div>
+      <div class="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+        {% for ev in data.recent_audit %}
+          <div class="px-5 py-3 text-sm flex items-start gap-3 hover:bg-slate-50 transition-colors">
+            <div class="text-xs text-slate-400 w-44 shrink-0">{{ ev.timestamp }}</div>
+            <div class="flex-1">
+              <div class="font-mono text-xs text-slate-700">{{ ev.event_type }}</div>
+              <div class="text-xs text-slate-500">{{ ev.model_name or '-' }}</div>
+            </div>
+          </div>
+        {% else %}
+          <div class="px-5 py-6 text-sm text-slate-400 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            no audit events yet — start logging predictions
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+      <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+        <h2 class="font-semibold text-slate-900">Active deployments</h2>
+        <a href="/deployments" class="text-xs text-sentinel-600 hover:underline">manage →</a>
+      </div>
+      <div class="divide-y divide-slate-100">
+        {% for d in data.active_deployments %}
+          <div class="px-5 py-3 text-sm hover:bg-slate-50 transition-colors">
+            <div class="font-medium">{{ d.model_name }} → v{{ d.to_version }}</div>
+            <div class="text-xs text-slate-500 mt-1">{{ d.strategy }} · {{ d.phase }} · {{ d.traffic_pct }}% traffic</div>
+            <div class="mt-2 w-full bg-slate-100 rounded-full h-1.5">
+              <div class="h-1.5 rounded-full bg-sentinel-500 transition-all" style="width: {{ d.traffic_pct }}%"></div>
+            </div>
+          </div>
+        {% else %}
+          <div class="px-5 py-6 text-sm text-slate-400 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+            no active deployments
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h2 class="font-semibold text-slate-900 mb-3">Compliance frameworks</h2>
+    {% if data.compliance_frameworks %}
+      <div class="flex flex-wrap gap-2">
+        {% for f in data.compliance_frameworks %}
+          <span class="px-2.5 py-1 text-xs rounded-full bg-sentinel-50 text-sentinel-700 border border-sentinel-100 font-medium">{{ f }}</span>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="text-sm text-slate-400">none declared in this config</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

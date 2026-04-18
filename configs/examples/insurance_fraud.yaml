@@ -1,0 +1,142 @@
+version: "1.0"
+
+# Full BFSI example: claims fraud classifier with PSI drift, SHAP feature health,
+# multi-channel escalation, canary deployment, and FCA-compliant audit retention.
+
+model:
+  name: claims_fraud_v2
+  type: classification
+  framework: xgboost
+  version: "2.3.1"
+  domain: tabular
+  baseline_dataset: s3://sentinel-demo/baseline/claims_fraud_v2.parquet
+  description: "Gradient-boosted classifier scoring claims for fraud risk."
+
+data_quality:
+  schema:
+    enforce: true
+    path: schemas/claims_v2.json
+  freshness:
+    max_age_hours: 24
+  outlier_detection:
+    method: isolation_forest
+    contamination: 0.05
+  null_threshold: 0.05
+  duplicate_threshold: 0.02
+
+drift:
+  data:
+    method: psi
+    threshold: 0.2
+    window: 7d
+    reference: baseline
+    features:
+      include: all
+      exclude: [claim_id, timestamp, customer_id]
+  concept:
+    method: ddm
+    warning_level: 2.0
+    drift_level: 3.0
+    min_samples: 200
+    requires_actuals: true
+  model:
+    metrics: [accuracy, f1, auc]
+    threshold:
+      accuracy: 0.05
+      f1: 0.08
+    evaluation_window: 1000
+
+feature_health:
+  importance_method: shap
+  alert_on_top_n_drift: 3
+  recalculate_importance: weekly
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#fraud-ml-alerts"
+    - type: teams
+      webhook_url: ${TEAMS_WEBHOOK_URL}
+    - type: pagerduty
+      routing_key: ${PD_ROUTING_KEY}
+      severity_mapping:
+        critical: critical
+        high: error
+        medium: warning
+  policies:
+    cooldown: 1h
+    digest_mode: false
+    rate_limit_per_hour: 30
+    escalation:
+      - after: 0m
+        channels: [slack]
+        severity: [medium, high, critical]
+      - after: 30m
+        channels: [slack, teams]
+        severity: [high, critical]
+      - after: 2h
+        channels: [slack, teams, pagerduty]
+        severity: [critical]
+
+retraining:
+  trigger: drift_confirmed
+  pipeline: azureml://pipelines/retrain_claims_fraud
+  approval:
+    mode: human_in_loop
+    approvers: [ml-team@example.com, risk-officer@example.com]
+    auto_promote_if:
+      metric: f1
+      improvement_pct: 2.0
+    timeout: 48h
+  validation:
+    holdout_dataset: s3://sentinel-demo/holdout/claims_fraud_v2.parquet
+    min_performance:
+      accuracy: 0.85
+      f1: 0.80
+
+deployment:
+  strategy: canary
+  canary:
+    initial_traffic_pct: 5
+    ramp_steps: [5, 25, 50, 100]
+    ramp_interval: 1h
+    rollback_on:
+      error_rate_increase: 0.02
+      latency_p99_increase_ms: 50
+  target: azure_ml_endpoint
+
+cost_monitor:
+  track:
+    - inference_latency_ms
+    - throughput_rps
+    - cost_per_prediction
+    - compute_utilisation_pct
+  alert_thresholds:
+    latency_p99_ms: 200
+    cost_per_1k_predictions: 5.00
+
+business_kpi:
+  mappings:
+    - model_metric: precision
+      business_kpi: fraud_catch_rate
+      data_source: warehouse://analytics.fraud_metrics
+    - model_metric: recall
+      business_kpi: false_positive_rate
+      data_source: warehouse://analytics.fraud_metrics
+
+audit:
+  storage: azure_blob
+  path: claims-fraud/audit/
+  retention_days: 2555
+  log_predictions: true
+  log_explanations: true
+  compliance_frameworks: [fca_consumer_duty, eu_ai_act]
+
+model_graph:
+  dependencies:
+    - upstream: feature_engineering_pipeline
+      downstream: claims_fraud_v2
+    - upstream: claims_fraud_v2
+      downstream: auto_adjudication_model
+  cascade_alerts: true

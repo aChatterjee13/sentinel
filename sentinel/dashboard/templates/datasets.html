@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block page_title %}Datasets{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="font-semibold text-slate-900">Dataset registry</h2>
+        <p class="text-xs text-slate-500 mt-1">{{ data.total }} version{{ 's' if data.total != 1 else '' }} across {{ data.datasets|length }} dataset{{ 's' if data.datasets|length != 1 else '' }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {% for ds in data.datasets %}
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <div class="flex items-center justify-between">
+          <div class="font-semibold text-slate-900">{{ ds.name }}</div>
+          <span class="text-xs text-slate-500">{{ ds.count }} version{{ 's' if ds.count != 1 else '' }}</span>
+        </div>
+        {% if ds.latest %}
+          <div class="text-xs text-slate-500 mt-1">
+            latest: <span class="font-mono">v{{ ds.latest.version }}</span>
+            {% if ds.latest.format and ds.latest.format != 'unknown' %}
+              · <span class="font-mono">{{ ds.latest.format }}</span>
+            {% endif %}
+            {% if ds.latest.split %}
+              · {{ ds.latest.split }}
+            {% endif %}
+            {% if ds.latest.num_rows is not none %}
+              · {{ ds.latest.num_rows }} rows
+            {% endif %}
+          </div>
+        {% endif %}
+        <div class="flex flex-wrap gap-1 mt-3">
+          {% for v in ds.versions %}
+            <a href="/datasets/{{ ds.name }}/{{ v.version }}"
+               class="px-2 py-0.5 text-xs rounded border border-slate-200 hover:bg-slate-50 font-mono transition-colors">v{{ v.version }}</a>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div class="col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center text-sm text-slate-400">
+        no registered datasets
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block page_title %}Retraining{% endblock %}
+{% block content %}
+<div class="space-y-8">
+  <h1 class="text-2xl font-bold text-slate-800">Retraining</h1>
+
+  <!-- Top row: drift status + retrain config -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- Drift Status Card -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-slate-700 mb-4">Drift Status</h2>
+      {% if data.latest_drift %}
+        <div class="flex items-center gap-3 mb-3">
+          {% if data.latest_drift.is_drifted %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">DRIFTED</span>
+          {% else %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">STABLE</span>
+          {% endif %}
+          <span class="text-sm text-slate-500">Method: {{ data.latest_drift.method }}</span>
+        </div>
+        <div class="text-sm text-slate-600">
+          <div>Severity: <span class="font-medium">{{ data.latest_drift.severity }}</span></div>
+          <div>Features drifted: {{ data.latest_drift.drifted_features | length }}</div>
+          <div>Test statistic: {{ "%.4f" | format(data.latest_drift.test_statistic) }}</div>
+        </div>
+      {% else %}
+        <p class="text-sm text-slate-400">No drift reports available yet.</p>
+      {% endif %}
+    </div>
+
+    <!-- Retrain Config Card -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-slate-700 mb-4">Retrain Configuration</h2>
+      <div class="space-y-2 text-sm">
+        <div>Trigger mode: <span class="font-mono">{{ data.retrain_config.trigger_mode }}</span></div>
+        <div>Pipeline: <span class="font-mono">{{ data.retrain_config.pipeline or 'not configured' }}</span></div>
+        <div>Approval: <span class="font-mono">{{ data.retrain_config.approval_mode }}</span></div>
+        <div class="flex items-center gap-2">
+          Pipeline runner:
+          {% if data.retrain_config.has_pipeline_runner %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">ready</span>
+          {% else %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">not configured</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trigger Retrain Button -->
+  <div class="bg-white rounded-xl shadow p-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-700">Trigger Retraining</h2>
+        <p class="text-sm text-slate-500 mt-1">Manually trigger a retrain pipeline run.</p>
+      </div>
+      {% if data.retrain_config.has_pipeline_runner %}
+        <button
+          hx-post="/api/retrain/trigger"
+          hx-headers='{"X-CSRF-Token": "{{ request.state.csrf_token }}"}'
+          hx-target="#trigger-result"
+          hx-swap="innerHTML"
+          class="px-4 py-2 bg-sentinel-500 text-white rounded-lg hover:bg-sentinel-600 transition-colors font-medium text-sm"
+        >
+          Trigger Retrain
+        </button>
+      {% else %}
+        <button
+          disabled
+          class="px-4 py-2 bg-slate-300 text-slate-500 rounded-lg cursor-not-allowed text-sm"
+          title="Pipeline runner not configured. Set retraining.pipeline in sentinel.yaml."
+        >
+          Trigger Retrain
+        </button>
+      {% endif %}
+    </div>
+    <div id="trigger-result" class="mt-4"></div>
+  </div>
+
+  <!-- Pending Approvals -->
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-lg font-semibold text-slate-700 mb-4">Pending Approvals</h2>
+    {% if data.pending_approvals %}
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500 border-b">
+            <th class="pb-2">Request ID</th>
+            <th class="pb-2">Candidate</th>
+            <th class="pb-2">Requested</th>
+            <th class="pb-2">Expires</th>
+            <th class="pb-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for req in data.pending_approvals %}
+          <tr class="border-b border-slate-100">
+            <td class="py-2 font-mono text-xs">{{ req.request_id }}</td>
+            <td class="py-2">{{ req.candidate_version }}</td>
+            <td class="py-2 text-xs text-slate-500">{{ req.requested_at }}</td>
+            <td class="py-2 text-xs text-slate-500">{{ req.expires_at }}</td>
+            <td class="py-2 space-x-2">
+              <button
+                hx-post="/api/retrain/approve/{{ req.request_id }}"
+                hx-headers='{"X-CSRF-Token": "{{ request.state.csrf_token }}"}'
+                hx-target="closest tr"
+                hx-swap="outerHTML"
+                class="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+              >
+                Approve
+              </button>
+              <button
+                hx-post="/api/retrain/reject/{{ req.request_id }}"
+                hx-headers='{"X-CSRF-Token": "{{ request.state.csrf_token }}"}'
+                hx-target="closest tr"
+                hx-swap="outerHTML"
+                class="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Reject
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="text-sm text-slate-400">No pending approval requests.</p>
+    {% endif %}
+  </div>
+
+  <!-- Recent Retrain Events -->
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-lg font-semibold text-slate-700 mb-4">Recent Retrain Events</h2>
+    {% if data.retrain_events %}
+      <div class="space-y-2">
+        {% for event in data.retrain_events %}
+          <div class="flex items-center gap-3 text-sm py-1 border-b border-slate-50">
+            <span class="text-xs text-slate-400 w-40 shrink-0">{{ event.timestamp }}</span>
+            <span class="font-mono text-xs px-2 py-0.5 rounded bg-slate-100">{{ event.event_type }}</span>
+            <span class="text-slate-600 truncate">{{ event.model_name or '' }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-sm text-slate-400">No retrain events recorded yet.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block page_title %}Intelligence{% endblock %}
+{% block content %}
+<div class="space-y-8">
+  <h1 class="text-2xl font-bold text-slate-800">Intelligence Layer</h1>
+
+  <!-- Top row: model graph + explainability status -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- Model Dependency Graph -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-slate-700 mb-4">Model Dependency Graph</h2>
+      {% if data.model_graph.nodes %}
+        <div class="space-y-3">
+          <div class="text-sm text-slate-500">{{ data.model_graph.nodes | length }} node(s), {{ data.model_graph.edges | length }} edge(s)</div>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500 border-b">
+                <th class="pb-2">Upstream</th>
+                <th class="pb-2">Downstream</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for edge in data.model_graph.edges %}
+              <tr class="border-b border-slate-100">
+                <td class="py-2 font-mono text-xs">{{ edge.upstream }}</td>
+                <td class="py-2 font-mono text-xs">{{ edge.downstream }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-sm text-slate-400">No model dependencies configured.</p>
+      {% endif %}
+    </div>
+
+    <!-- Explainability Status -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-slate-700 mb-4">Explainability</h2>
+      <div class="space-y-3">
+        <div class="flex items-center gap-2">
+          <span class="inline-block w-3 h-3 rounded-full {{ 'bg-green-500' if data.explainability.configured else 'bg-slate-300' }}"></span>
+          <span class="text-sm">{{ 'Configured' if data.explainability.configured else 'Not configured' }}</span>
+        </div>
+        <div class="text-sm text-slate-500">
+          Method: <span class="font-mono">{{ data.explainability.method }}</span>
+        </div>
+        {% if not data.explainability.configured %}
+          <p class="text-xs text-slate-400 mt-2">
+            Call <code>client.set_model_for_explanations(model, feature_names)</code> to enable per-prediction explanations.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Cascade Impact Panel -->
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-lg font-semibold text-slate-700 mb-4">Cascade Impact</h2>
+    {% if data.cascade_impact and data.cascade_impact.downstream_affected %}
+      <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div class="text-sm font-medium text-amber-800">
+          Drift in <span class="font-mono">{{ model_name }}</span> would affect {{ data.cascade_impact.downstream_affected | length }} downstream model(s):
+        </div>
+        <ul class="mt-2 space-y-1">
+          {% for m in data.cascade_impact.downstream_affected %}
+            <li class="text-sm text-amber-700 font-mono">{{ m }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% else %}
+      <p class="text-sm text-slate-400">No downstream models affected by drift in {{ model_name }}.</p>
+    {% endif %}
+  </div>
+
+  <!-- KPI Linkage Table -->
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-lg font-semibold text-slate-700 mb-4">Business KPI Linkage</h2>
+    {% if data.kpi_report.linked_kpis %}
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500 border-b">
+            <th class="pb-2">Model Metric</th>
+            <th class="pb-2">Business KPI</th>
+            <th class="pb-2">Metric Value</th>
+            <th class="pb-2">KPI Value</th>
+            <th class="pb-2">Data Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for link in data.kpi_report.linked_kpis %}
+          <tr class="border-b border-slate-100">
+            <td class="py-2 font-mono text-xs">{{ link.model_metric }}</td>
+            <td class="py-2 font-mono text-xs">{{ link.business_kpi }}</td>
+            <td class="py-2">{{ link.metric_value if link.metric_value is not none else '—' }}</td>
+            <td class="py-2">{{ link.kpi_value if link.kpi_value is not none else '—' }}</td>
+            <td class="py-2 text-xs text-slate-400">{{ link.data_source or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="text-sm text-slate-400">No business KPI mappings configured.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

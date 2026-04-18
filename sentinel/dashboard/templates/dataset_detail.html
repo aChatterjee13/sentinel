@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block page_title %}Dataset version{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <!-- Breadcrumb -->
+  <div class="flex items-center gap-2 text-sm">
+    <a href="/datasets" class="text-sentinel-600 hover:underline">← datasets</a>
+    <span class="text-slate-300">/</span>
+    <span class="font-mono text-xs text-slate-700">{{ dataset_name_arg }}</span>
+    <span class="text-slate-300">/</span>
+    <span class="font-mono text-xs text-slate-700">v{{ data.dataset.version }}</span>
+  </div>
+
+  <!-- Main details -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Name</div>
+        <div class="text-base font-semibold mt-1">{{ data.dataset.name }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Version</div>
+        <div class="text-base font-semibold mt-1 font-mono">v{{ data.dataset.version }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Format</div>
+        <div class="text-base mt-1">{{ data.dataset.format or '—' }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Split</div>
+        <div class="text-base mt-1">{{ data.dataset.split or '—' }}</div>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Rows</div>
+        <div class="text-base mt-1">{{ data.dataset.num_rows if data.dataset.num_rows is not none else '—' }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Features</div>
+        <div class="text-base mt-1">{{ data.dataset.num_features if data.dataset.num_features is not none else '—' }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Created</div>
+        <div class="text-xs mt-1">{{ data.dataset.created_at or '—' }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Source</div>
+        <div class="text-xs mt-1 break-all">{{ data.dataset.source or '—' }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Path & Hash -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h3 class="font-semibold text-slate-900 mb-3">Location &amp; integrity</h3>
+    <dl class="grid grid-cols-1 gap-2 text-sm">
+      <div class="flex">
+        <dt class="text-slate-500 w-32 shrink-0 font-mono text-xs">path</dt>
+        <dd class="text-slate-800 break-all font-mono text-xs">{{ data.dataset.path }}</dd>
+      </div>
+      <div class="flex">
+        <dt class="text-slate-500 w-32 shrink-0 font-mono text-xs">content_hash</dt>
+        <dd class="text-slate-800 break-all font-mono text-xs">{{ data.dataset.content_hash or '—' }}</dd>
+      </div>
+      {% if data.dataset.derived_from %}
+      <div class="flex">
+        <dt class="text-slate-500 w-32 shrink-0 font-mono text-xs">derived_from</dt>
+        <dd class="text-slate-800 break-all font-mono text-xs">{{ data.dataset.derived_from }}</dd>
+      </div>
+      {% endif %}
+    </dl>
+  </div>
+
+  {% if data.dataset.description %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h3 class="font-semibold text-slate-900 mb-3">Description</h3>
+    <p class="text-sm text-slate-700">{{ data.dataset.description }}</p>
+  </div>
+  {% endif %}
+
+  <!-- Schema -->
+  {% if data.dataset.schema %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h3 class="font-semibold text-slate-900 mb-3">Schema</h3>
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+        <tr>
+          <th class="text-left px-4 py-2">Column</th>
+          <th class="text-left px-4 py-2">Type</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for col, dtype in data.dataset.schema.items() %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-mono text-xs">{{ col }}</td>
+          <td class="px-4 py-2 font-mono text-xs text-slate-600">{{ dtype }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Tags -->
+  {% if data.dataset.tags %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h3 class="font-semibold text-slate-900 mb-3">Tags</h3>
+    <div class="flex flex-wrap gap-2">
+      {% for tag in data.dataset.tags %}
+        <span class="px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-700">{{ tag }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Lineage -->
+  {% if data.dataset.linked_experiments or data.dataset.linked_models %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h3 class="font-semibold text-slate-900 mb-3">Lineage</h3>
+    {% if data.dataset.linked_experiments %}
+    <div class="mb-3">
+      <div class="text-xs uppercase tracking-wider text-slate-500 mb-1">Linked experiments</div>
+      <div class="flex flex-wrap gap-1">
+        {% for run_id in data.dataset.linked_experiments %}
+          <span class="px-2 py-0.5 text-xs rounded border border-slate-200 font-mono">{{ run_id }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% if data.dataset.linked_models %}
+    <div>
+      <div class="text-xs uppercase tracking-wider text-slate-500 mb-1">Linked models</div>
+      <div class="flex flex-wrap gap-1">
+        {% for m in data.dataset.linked_models %}
+          <a href="/registry/{{ m.name }}/{{ m.version }}"
+             class="px-2 py-0.5 text-xs rounded border border-slate-200 hover:bg-slate-50 font-mono transition-colors">{{ m.name }}@{{ m.version }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Metadata -->
+  {% if data.dataset.metadata %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h3 class="font-semibold text-slate-900 mb-3">Metadata</h3>
+    <dl class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+      {% for k, v in data.dataset.metadata.items() %}
+        <div class="flex">
+          <dt class="text-slate-500 w-40 shrink-0 font-mono text-xs">{{ k }}</dt>
+          <dd class="text-slate-800 break-all">{{ v }}</dd>
+        </div>
+      {% endfor %}
+    </dl>
+  </div>
+  {% endif %}
+
+  <!-- All versions -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h3 class="font-semibold text-slate-900 mb-3">All versions of {{ dataset_name_arg }}</h3>
+    <div class="flex flex-wrap gap-1">
+      {% for v in data.sibling_versions %}
+        <a href="/datasets/{{ dataset_name_arg }}/{{ v }}"
+           class="px-2 py-0.5 text-xs rounded border font-mono transition-colors
+                  {% if v == data.dataset.version %}border-sentinel-500 bg-sentinel-50 text-sentinel-700{% else %}border-slate-200 hover:bg-slate-50{% endif %}">v{{ v }}</a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

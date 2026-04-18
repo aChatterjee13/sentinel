@@ -1,0 +1,86 @@
+version: "1.0"
+
+# Recommendation system example: e-commerce product recommendations with
+# beyond-accuracy metrics, popularity bias guards, and group fairness checks.
+
+model:
+  name: product_reco_v5
+  type: ranking
+  framework: implicit
+  version: "5.0.3"
+  domain: recommendation
+  baseline_dataset: s3://sentinel-demo/baseline/interactions.parquet
+
+drift:
+  data:
+    method: js_divergence
+    threshold: 0.1
+    window: 7d
+
+domains:
+  recommendation:
+    model_type: collaborative_filtering
+    item_id_field: product_id
+    user_id_field: user_id
+    interaction_types: [click, purchase, add_to_cart]
+    drift:
+      item_distribution:
+        track_cold_start_ratio: true
+        long_tail_ratio_threshold: 0.3
+        catalogue_change_window: 7d
+        threshold: 0.1
+      user_distribution:
+        segment_field: user_segment
+        interaction_pattern_window: 14d
+        threshold: 0.1
+    quality:
+      ranking_metrics: [ndcg_at_10, map_at_10]
+      beyond_accuracy:
+        coverage:
+          min_threshold: 0.4
+        diversity:
+          method: intra_list_similarity
+          min_threshold: 0.3
+        novelty:
+          method: inverse_popularity
+          track_trend: true
+        popularity_bias:
+          method: gini_coefficient
+          max_threshold: 0.8
+      fairness:
+        protected_attribute: user_segment
+        metric: ndcg_at_10
+        max_disparity: 0.1
+    ab_testing:
+      integration: optimizely
+      guardrail_metrics: [revenue_per_session, engagement_rate]
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#recsys-alerts"
+  policies:
+    cooldown: 1h
+
+retraining:
+  trigger: scheduled
+  schedule: "0 2 * * *"  # nightly at 02:00
+  approval:
+    mode: auto
+    auto_promote_if:
+      metric: ndcg_at_10
+      improvement_pct: 1.0
+
+deployment:
+  strategy: canary
+  canary:
+    initial_traffic_pct: 10
+    ramp_steps: [10, 30, 60, 100]
+    ramp_interval: 2h
+    rollback_on:
+      revenue_drop_pct: 0.03
+
+audit:
+  storage: azure_blob
+  path: recsys/audit/

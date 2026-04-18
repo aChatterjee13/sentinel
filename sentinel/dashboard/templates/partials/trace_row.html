@@ -1,0 +1,11 @@
+{% for t in traces %}
+  <tr class="hover:bg-slate-50">
+    <td class="px-5 py-2 font-mono text-xs">
+      <a href="/agentops/traces/{{ t.trace_id }}" class="text-sentinel-600 hover:underline">{{ t.trace_id[:12] }}…</a>
+    </td>
+    <td class="px-5 py-2">{{ t.agent_name or '-' }}</td>
+    <td class="px-5 py-2">{{ t.status }}</td>
+    <td class="px-5 py-2 text-right">{{ t.span_count or 0 }}</td>
+    <td class="px-5 py-2 text-right">{{ "%.0f"|format(t.duration_ms or 0) }}ms</td>
+  </tr>
+{% endfor %}

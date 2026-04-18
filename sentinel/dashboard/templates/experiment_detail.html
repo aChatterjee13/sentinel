@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block page_title %}{{ data.experiment.name }}{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="flex items-center gap-2 text-sm">
+    <a href="/experiments" class="text-sentinel-600 hover:underline">← experiments</a>
+    <span class="text-slate-300">/</span>
+    <span class="font-mono text-xs text-slate-700">{{ data.experiment.name }}</span>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="font-semibold text-slate-900">{{ data.experiment.name }}</h2>
+        {% if data.experiment.description %}
+          <p class="text-sm text-slate-600 mt-1">{{ data.experiment.description }}</p>
+        {% endif %}
+      </div>
+      <span class="text-sm text-slate-500">{{ data.total_runs }} run{{ 's' if data.total_runs != 1 else '' }}</span>
+    </div>
+    {% if data.experiment.tags %}
+      <div class="flex flex-wrap gap-1 mt-3">
+        {% for tag in data.experiment.tags %}
+          <span class="px-1.5 py-0.5 text-xs rounded bg-sentinel-50 text-sentinel-700">{{ tag }}</span>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Metric chart placeholder -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h3 class="font-semibold text-slate-900 mb-3">Metric history</h3>
+    <div id="experiment-metrics-chart" class="h-64"
+         hx-get="/api/experiments/{{ data.experiment.name }}/metrics"
+         hx-trigger="load"
+         hx-swap="none">
+      <p class="text-sm text-slate-400">Loading chart…</p>
+    </div>
+  </div>
+
+  <!-- Runs table -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-left">
+        <tr>
+          <th class="px-4 py-3 font-medium text-slate-600">Run ID</th>
+          <th class="px-4 py-3 font-medium text-slate-600">Name</th>
+          <th class="px-4 py-3 font-medium text-slate-600">Status</th>
+          <th class="px-4 py-3 font-medium text-slate-600">Metrics</th>
+          <th class="px-4 py-3 font-medium text-slate-600">Started</th>
+          <th class="px-4 py-3 font-medium text-slate-600">Model</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for run in data.runs %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-2">
+              <a href="/experiments/runs/{{ run.run_id }}" class="font-mono text-xs text-sentinel-600 hover:underline">{{ run.run_id[:12] }}…</a>
+            </td>
+            <td class="px-4 py-2 text-slate-700">{{ run.name or '—' }}</td>
+            <td class="px-4 py-2">
+              <span class="px-2 py-0.5 text-xs rounded-full
+                {% if run.status == 'completed' %}bg-emerald-100 text-emerald-700
+                {% elif run.status == 'failed' %}bg-red-100 text-red-700
+                {% else %}bg-amber-100 text-amber-700{% endif %}">{{ run.status }}</span>
+            </td>
+            <td class="px-4 py-2">
+              <div class="flex flex-wrap gap-1">
+                {% for k, v in run.metrics.items() %}
+                  <span class="text-xs font-mono text-slate-600">{{ k }}={{ '%.4f'|format(v) }}</span>
+                {% endfor %}
+              </div>
+            </td>
+            <td class="px-4 py-2 text-xs text-slate-500">{{ run.started_at[:19] }}</td>
+            <td class="px-4 py-2 text-xs text-slate-500 font-mono">{{ run.promoted_to or '—' }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="6" class="px-4 py-8 text-center text-slate-400">no runs</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("htmx:afterRequest", function(evt) {
+    if (evt.detail.pathInfo.requestPath.includes("/api/experiments/") && evt.detail.pathInfo.requestPath.includes("/metrics")) {
+      try {
+        var data = JSON.parse(evt.detail.xhr.responseText);
+        var traces = [];
+        for (var runId in data.runs) {
+          var runMetrics = data.runs[runId];
+          for (var metricName in runMetrics) {
+            var entries = runMetrics[metricName];
+            traces.push({
+              x: entries.map(function(e, i) { return e.step !== null ? e.step : i; }),
+              y: entries.map(function(e) { return e.value; }),
+              name: runId.substring(0, 8) + " — " + metricName,
+              mode: "lines+markers",
+              type: "scatter"
+            });
+          }
+        }
+        if (traces.length > 0) {
+          Plotly.newPlot("experiment-metrics-chart", traces, {
+            margin: {t: 10, b: 40, l: 50, r: 10},
+            xaxis: {title: "Step"},
+            yaxis: {title: "Value"},
+            legend: {orientation: "h", y: -0.2}
+          }, {responsive: true});
+        } else {
+          document.getElementById("experiment-metrics-chart").innerHTML = '<p class="text-sm text-slate-400">No metric history available</p>';
+        }
+      } catch (e) { /* ignore parse errors */ }
+    }
+  });
+</script>
+{% endblock %}

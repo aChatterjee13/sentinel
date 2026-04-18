@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Explanations — {{ model_name }}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6" data-auto-refresh="30">
+  <h1 class="text-2xl font-bold">Model Explanations</h1>
+
+  {% if not data.available %}
+  <div class="bg-yellow-50 border border-yellow-200 rounded p-4">
+    <p class="text-yellow-800">No model set for explanations. Call <code>client.set_model_for_explanations(model, feature_names)</code> first.</p>
+  </div>
+  {% else %}
+
+  <div class="bg-white shadow rounded p-4">
+    <p class="text-sm text-gray-600">{{ data.summary }}</p>
+  </div>
+
+  {% if data.error %}
+  <div class="bg-red-50 border border-red-200 rounded p-4">
+    <p class="text-red-800">{{ data.error }}</p>
+  </div>
+  {% endif %}
+
+  <!-- Global importance chart -->
+  {% if data.global_importance %}
+  <div class="bg-white shadow rounded p-4">
+    <h2 class="text-lg font-semibold mb-3">Global Feature Importance</h2>
+    <div id="explain-chart" data-chart="globalImportance" data-url="/api/explanations/global" style="height:400px"></div>
+  </div>
+
+  <!-- Importance table -->
+  <div class="bg-white shadow rounded overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-2 text-left">Feature</th>
+          <th class="px-4 py-2 text-right">Mean |Attribution|</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for name, value in data.global_importance.items() %}
+        <tr class="border-t">
+          <td class="px-4 py-2 font-mono">{{ name }}</td>
+          <td class="px-4 py-2 text-right font-mono">{{ "%.6f"|format(value) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+{% endblock %}

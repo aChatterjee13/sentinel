@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Cohort: {{ data.cohort_id }} — {{ model_name }}{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+  <div class="flex items-center gap-3">
+    <a href="/cohorts" class="text-blue-600 hover:underline text-sm">← Cohorts</a>
+    <h1 class="text-2xl font-bold">Cohort: {{ data.cohort_id }}</h1>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="bg-white shadow rounded p-4 text-center">
+      <p class="text-xs text-gray-500">Count</p>
+      <p class="text-2xl font-bold font-mono">{{ data.count }}</p>
+    </div>
+    <div class="bg-white shadow rounded p-4 text-center">
+      <p class="text-xs text-gray-500">Mean Prediction</p>
+      <p class="text-2xl font-bold font-mono">{{ "%.4f"|format(data.mean_prediction) if data.mean_prediction is not none else "—" }}</p>
+    </div>
+    <div class="bg-white shadow rounded p-4 text-center">
+      <p class="text-xs text-gray-500">Mean Actual</p>
+      <p class="text-2xl font-bold font-mono">{{ "%.4f"|format(data.mean_actual) if data.mean_actual is not none else "—" }}</p>
+    </div>
+    <div class="bg-white shadow rounded p-4 text-center">
+      <p class="text-xs text-gray-500">Accuracy</p>
+      <p class="text-2xl font-bold font-mono">{{ "%.2f%%"|format(data.accuracy * 100) if data.accuracy is not none else "—" }}</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

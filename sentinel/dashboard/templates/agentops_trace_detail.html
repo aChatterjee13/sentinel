@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block page_title %}Trace detail{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="flex items-center gap-2 text-sm">
+    <a href="/agentops/traces" class="text-sentinel-600 hover:underline">← traces</a>
+    <span class="text-slate-300">/</span>
+    <span class="font-mono text-xs text-slate-700">{{ data.summary.trace_id }}</span>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 card-hover">
+      <div class="text-xs uppercase tracking-wider text-slate-500">Agent</div>
+      <div class="text-base font-semibold mt-1">{{ data.summary.agent_name or '—' }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 card-hover">
+      <div class="text-xs uppercase tracking-wider text-slate-500">Status</div>
+      <div class="text-base font-semibold mt-1 flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full {{ 'bg-emerald-500' if data.summary.status == 'completed' else 'bg-red-500' if data.summary.status == 'error' else 'bg-amber-500' }}"></span>
+        {{ data.summary.status }}
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 card-hover">
+      <div class="text-xs uppercase tracking-wider text-slate-500">Duration</div>
+      <div class="text-base font-semibold mt-1">{{ "%.0f"|format(data.summary.duration_ms or 0) }}ms</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 card-hover">
+      <div class="text-xs uppercase tracking-wider text-slate-500">Spans</div>
+      <div class="text-base font-semibold mt-1">{{ data.summary.span_count or 0 }}</div>
+    </div>
+  </div>
+
+  <!-- Waterfall chart -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h2 class="font-semibold text-slate-900 mb-3">Execution waterfall</h2>
+    <p class="text-xs text-slate-500 mb-3">Blue = reasoning, amber = tool calls, red = errors</p>
+    <div class="h-80" data-chart="agent-trace-waterfall" data-url="/api/traces/{{ data.summary.trace_id }}/gantt"></div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+      <div class="px-5 py-3 border-b border-slate-200">
+        <h2 class="font-semibold text-slate-900">Timeline</h2>
+      </div>
+      <pre class="p-5 text-xs font-mono overflow-x-auto whitespace-pre max-h-80 overflow-y-auto">{{ data.timeline }}</pre>
+    </section>
+    <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+      <div class="px-5 py-3 border-b border-slate-200">
+        <h2 class="font-semibold text-slate-900">Tree</h2>
+      </div>
+      <pre class="p-5 text-xs font-mono overflow-x-auto whitespace-pre max-h-80 overflow-y-auto">{{ data.tree }}</pre>
+    </section>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="px-5 py-3 border-b border-slate-200">
+      <h2 class="font-semibold text-slate-900">Spans</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+          <tr>
+            <th class="text-left px-5 py-2">Span</th>
+            <th class="text-left px-5 py-2">Kind</th>
+            <th class="text-left px-5 py-2">Status</th>
+            <th class="text-right px-5 py-2">Duration</th>
+            <th class="text-left px-5 py-2">Started</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for s in data.spans %}
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-5 py-2 font-mono text-xs">{{ s.name }}</td>
+              <td class="px-5 py-2 text-xs">
+                <span class="px-2 py-0.5 rounded-full text-xs
+                  {% if s.kind == 'tool_call' %}bg-amber-100 text-amber-700
+                  {% elif s.kind == 'llm' %}bg-purple-100 text-purple-700
+                  {% else %}bg-slate-100 text-slate-600{% endif %}">{{ s.kind }}</span>
+              </td>
+              <td class="px-5 py-2 text-xs">
+                <span class="flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full {{ 'bg-emerald-500' if s.status == 'ok' else 'bg-red-500' if s.status == 'error' else 'bg-slate-400' }}"></span>
+                  {{ s.status }}
+                </span>
+              </td>
+              <td class="px-5 py-2 text-right font-mono text-xs">{{ "%.0f"|format(s.duration_ms or 0) }}ms</td>
+              <td class="px-5 py-2 font-mono text-xs text-slate-500">{{ s.start_time }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

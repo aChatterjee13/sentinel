@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block page_title %}Model version{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="flex items-center gap-2 text-sm">
+    <a href="/registry" class="text-sentinel-600 hover:underline">← registry</a>
+    <span class="text-slate-300">/</span>
+    <span class="font-mono text-xs text-slate-700">{{ model_name_arg }}</span>
+    <span class="text-slate-300">/</span>
+    <span class="font-mono text-xs text-slate-700">v{{ data.model.version }}</span>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Name</div>
+        <div class="text-base font-semibold mt-1">{{ data.model.name }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Version</div>
+        <div class="text-base font-semibold mt-1 font-mono">v{{ data.model.version }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Framework</div>
+        <div class="text-base mt-1">{{ data.model.framework or '—' }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500">Registered</div>
+        <div class="text-xs mt-1">{{ data.model.registered_at or '—' }}</div>
+      </div>
+    </div>
+  </div>
+
+  {% if data.model.metadata %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h3 class="font-semibold text-slate-900 mb-3">Metadata</h3>
+    <dl class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+      {% for k, v in data.model.metadata.items() %}
+        <div class="flex">
+          <dt class="text-slate-500 w-40 shrink-0 font-mono text-xs">{{ k }}</dt>
+          <dd class="text-slate-800 break-all">{{ v }}</dd>
+        </div>
+      {% endfor %}
+    </dl>
+  </div>
+  {% endif %}
+
+  {% if data.baseline %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h3 class="font-semibold text-slate-900 mb-3">Performance baseline</h3>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {% for k, v in data.baseline.items() %}
+        <div>
+          <div class="text-xs uppercase tracking-wider text-slate-500">{{ k }}</div>
+          <div class="text-base font-semibold mt-1">{{ v }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h3 class="font-semibold text-slate-900 mb-3">All versions of {{ model_name_arg }}</h3>
+    <div class="flex flex-wrap gap-1">
+      {% for v in data.sibling_versions %}
+        <a href="/registry/{{ model_name_arg }}/{{ v }}"
+           class="px-2 py-0.5 text-xs rounded border font-mono
+                  {% if v == data.model.version %}border-sentinel-500 bg-sentinel-50 text-sentinel-700{% else %}border-slate-200 hover:bg-slate-50{% endif %}">v{{ v }}</a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

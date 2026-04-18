@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block page_title %}Experiments{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h2 class="font-semibold text-slate-900">Experiments</h2>
+    <p class="text-xs text-slate-500 mt-1">{{ data.total }} experiment{{ 's' if data.total != 1 else '' }} tracked</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {% for exp in data.experiments %}
+      <a href="/experiments/{{ exp.name }}" class="block bg-white rounded-xl shadow-sm border border-slate-200 p-5 hover:border-sentinel-500 transition-colors">
+        <div class="flex items-center justify-between">
+          <div class="font-semibold">{{ exp.name }}</div>
+          <span class="text-xs text-slate-500">{{ exp.run_count }} run{{ 's' if exp.run_count != 1 else '' }}</span>
+        </div>
+        {% if exp.description %}
+          <p class="text-sm text-slate-600 mt-1">{{ exp.description }}</p>
+        {% endif %}
+        <div class="text-xs text-slate-400 mt-2">created {{ exp.created_at[:10] }}</div>
+        {% if exp.latest_metrics %}
+          <div class="flex flex-wrap gap-2 mt-3">
+            {% for k, v in exp.latest_metrics.items() %}
+              <span class="px-2 py-0.5 text-xs rounded bg-slate-100 text-slate-700 font-mono">{{ k }}: {{ '%.4f'|format(v) }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+        {% if exp.tags %}
+          <div class="flex flex-wrap gap-1 mt-2">
+            {% for tag in exp.tags %}
+              <span class="px-1.5 py-0.5 text-xs rounded bg-sentinel-50 text-sentinel-700">{{ tag }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </a>
+    {% else %}
+      <div class="col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center text-sm text-slate-400">
+        no experiments yet
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

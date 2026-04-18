@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block page_title %}Deployments{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <div class="flex items-center justify-between">
+      <h2 class="font-semibold text-slate-900">Deployments</h2>
+      <div class="text-xs text-slate-500">default strategy: <span class="font-mono">{{ data.default_strategy }}</span></div>
+    </div>
+  </div>
+
+  <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="px-5 py-3 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-900">Active</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+          <tr>
+            <th class="text-left px-5 py-2">Model</th>
+            <th class="text-left px-5 py-2">From → To</th>
+            <th class="text-left px-5 py-2">Strategy</th>
+            <th class="text-left px-5 py-2">Phase</th>
+            <th class="text-right px-5 py-2">Traffic %</th>
+            <th class="text-left px-5 py-2">Started</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for d in data.active %}
+            <tr class="hover:bg-slate-50">
+              <td class="px-5 py-2">{{ d.model_name }}</td>
+              <td class="px-5 py-2 font-mono text-xs">v{{ d.from_version or '?' }} → v{{ d.to_version }}</td>
+              <td class="px-5 py-2">{{ d.strategy }}</td>
+              <td class="px-5 py-2">{{ d.phase }}</td>
+              <td class="px-5 py-2 text-right">{{ d.traffic_pct }}%</td>
+              <td class="px-5 py-2 font-mono text-xs text-slate-500">{{ d.started_at or '' }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6" class="px-5 py-6 text-center text-sm text-slate-400">no active deployments</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="px-5 py-3 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-900">History</h3>
+    </div>
+    <div class="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+      {% for h in data.history %}
+        <div class="px-5 py-3 text-sm">
+          <div class="flex items-center justify-between">
+            <div class="font-mono text-xs text-slate-700">{{ h.event_type }}</div>
+            <div class="text-xs text-slate-500">{{ h.timestamp }}</div>
+          </div>
+          <div class="text-xs text-slate-500 mt-1">{{ h.model_name or '-' }} v{{ h.model_version or '?' }}</div>
+        </div>
+      {% else %}
+        <div class="px-5 py-6 text-center text-sm text-slate-400">no deployment history</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% for ev in events %}
+  <div class="px-5 py-3 text-sm flex items-start gap-3">
+    <div class="text-xs text-slate-400 w-44 shrink-0">{{ ev.timestamp }}</div>
+    <div class="flex-1">
+      <div class="font-mono text-xs text-slate-700">{{ ev.method or 'drift' }}</div>
+      <div class="text-xs text-slate-500">{{ ev.severity or 'info' }} · {{ ev.n_drifted }} features</div>
+    </div>
+  </div>
+{% else %}
+  <div class="px-5 py-6 text-sm text-slate-400 text-center">no drift events yet</div>
+{% endfor %}

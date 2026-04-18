@@ -1,0 +1,84 @@
+version: "1.0"
+
+# Graph ML example: GNN over a transaction network for fraud ring detection.
+# Topology drift, degree distribution shifts, and link-prediction quality.
+
+model:
+  name: txn_fraud_gnn
+  type: classification
+  framework: pyg
+  version: "0.9.0"
+  domain: graph
+  baseline_dataset: s3://sentinel-demo/baseline/txn_graph.pkl
+
+drift:
+  data:
+    method: ks
+    threshold: 0.1
+    window: 7d
+
+domains:
+  graph:
+    task: link_prediction
+    graph_type: transaction_graph
+    framework: pyg
+    drift:
+      topology:
+        threshold: 0.1
+        degree_distribution:
+          method: ks_test
+          window: 7d
+          threshold: 0.05
+        density_monitoring: true
+        clustering_coefficient: true
+        connected_components: true
+      node_features:
+        method: psi
+        threshold: 0.2
+      knowledge_graph:
+        entity_vocabulary:
+          oov_entity_threshold: 0.1
+    quality:
+      metrics: [auc_roc, hits_at_10, mrr]
+      embedding_isotropy:
+        track: true
+        threshold: 0.3
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#graph-ml-alerts"
+    - type: pagerduty
+      routing_key: ${PD_ROUTING_KEY}
+  policies:
+    cooldown: 30m
+    escalation:
+      - after: 0m
+        channels: [slack]
+        severity: [high, critical]
+      - after: 15m
+        channels: [slack, pagerduty]
+        severity: [critical]
+
+retraining:
+  trigger: drift_confirmed
+  pipeline: ./pipelines/retrain_gnn.py
+  approval:
+    mode: human_in_loop
+    approvers: [graph-ml@example.com]
+  validation:
+    min_performance:
+      auc_roc: 0.92
+      hits_at_10: 0.7
+
+deployment:
+  strategy: shadow
+  shadow:
+    duration: 72h
+
+audit:
+  storage: azure_blob
+  path: gnn-fraud/audit/
+  retention_days: 2555
+  compliance_frameworks: [fca_consumer_duty]

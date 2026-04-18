@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block page_title %}Agent traces{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h2 class="font-semibold text-slate-900">Recent agent traces</h2>
+    <p class="text-xs text-slate-500 mt-1">{{ data.traces|length }} runs in the in-process tracer</p>
+  </div>
+
+  {% if not data.enabled %}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center text-sm text-slate-400">
+      AgentOps is disabled in this configuration
+    </div>
+  {% else %}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+            <tr>
+              <th class="text-left px-5 py-2">Trace</th>
+              <th class="text-left px-5 py-2">Agent</th>
+              <th class="text-left px-5 py-2">Status</th>
+              <th class="text-right px-5 py-2">Spans</th>
+              <th class="text-right px-5 py-2">Duration</th>
+              <th class="text-right px-5 py-2">Tokens</th>
+              <th class="text-right px-5 py-2">Cost</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for t in data.traces %}
+              <tr class="hover:bg-slate-50">
+                <td class="px-5 py-2 font-mono text-xs">
+                  <a href="/agentops/traces/{{ t.trace_id }}" class="text-sentinel-600 hover:underline">{{ t.trace_id[:12] }}…</a>
+                </td>
+                <td class="px-5 py-2">{{ t.agent_name or '-' }}</td>
+                <td class="px-5 py-2">
+                  <span class="px-2 py-0.5 text-xs rounded-full
+                    {% if t.status == 'completed' or t.status == 'success' %}bg-emerald-100 text-emerald-700
+                    {% elif t.status == 'failed' or t.status == 'error' %}bg-red-100 text-red-700
+                    {% else %}bg-slate-100 text-slate-600{% endif %}">{{ t.status }}</span>
+                </td>
+                <td class="px-5 py-2 text-right">{{ t.span_count or 0 }}</td>
+                <td class="px-5 py-2 text-right">{{ "%.0f"|format(t.duration_ms or 0) }}ms</td>
+                <td class="px-5 py-2 text-right">{{ t.total_tokens or 0 }}</td>
+                <td class="px-5 py-2 text-right">${{ "%.4f"|format(t.total_cost or 0) }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="7" class="px-5 py-6 text-center text-sm text-slate-400">no agent traces yet</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

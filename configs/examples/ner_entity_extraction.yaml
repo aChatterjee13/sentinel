@@ -1,0 +1,72 @@
+version: "1.0"
+
+# NLP example (non-LLM): a spaCy NER model extracting entities from
+# customer correspondence. Tracks vocabulary drift, embedding-space shift,
+# label distribution drift, and per-entity F1.
+
+model:
+  name: customer_correspondence_ner
+  type: classification
+  framework: spacy
+  version: "1.4.2"
+  domain: nlp
+  baseline_dataset: s3://sentinel-demo/baseline/correspondence_train.jsonl
+
+drift:
+  data:
+    method: js_divergence
+    threshold: 0.1
+    window: 7d
+
+domains:
+  nlp:
+    task: ner
+    embedding_model: sentence-transformers/all-MiniLM-L6-v2
+    drift:
+      method: vocabulary
+      threshold: 0.05
+      vocabulary:
+        oov_rate_threshold: 0.05
+        track_new_tokens: true
+        top_new_tokens_k: 50
+      embedding:
+        method: cosine_centroid
+        threshold: 0.1
+        window: 7d
+      label_distribution:
+        method: chi_squared
+        threshold: 0.05
+      text_stats:
+        track: [avg_length, language_dist, oov_rate, special_char_rate]
+    quality:
+      metrics: [token_f1, span_exact_match]
+      per_entity_tracking: true
+      min_samples_per_class: 50
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#nlp-alerts"
+  policies:
+    cooldown: 2h
+    digest_mode: true
+    digest_interval: 6h
+
+retraining:
+  trigger: drift_confirmed
+  pipeline: ./pipelines/retrain_ner.py
+  approval:
+    mode: human_in_loop
+    approvers: [nlp-team@example.com]
+  validation:
+    min_performance:
+      f1: 0.88
+
+deployment:
+  strategy: blue_green
+  target: azure_app_service
+
+audit:
+  storage: local
+  path: ./audit/ner/

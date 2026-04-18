@@ -1,0 +1,190 @@
+version: "1.0"
+
+# ─────────────────────────────────────────────────────────────────────
+# DEMO CONFIG — Enterprise platform team, multi-framework agent estate
+# Playbook E: The agent platform team
+#
+# Talking points for this config:
+#   - One config governs LangGraph + Semantic Kernel + Google ADK agents
+#   - Per-team budgets, per-agent tool permissions
+#   - Loop/thrash/delegation depth detection across all agents
+#   - Golden-suite eval gates the version_change CI pipeline
+#   - A2A registry — agents discover each other by capability
+#   - Audit trail proves every reasoning step for any agent in the estate
+# ─────────────────────────────────────────────────────────────────────
+
+model:
+  name: enterprise_agent_platform
+  type: generation
+  domain: tabular
+  description: "Multi-team agent estate — 12 agents across 3 frameworks"
+
+drift:
+  data:
+    method: psi
+    threshold: 0.2
+
+llmops:
+  enabled: true
+  mode: agent
+
+  guardrails:
+    input:
+      - type: pii_detection
+        action: redact
+        entities: [person, ssn, account_number, email, phone]
+      - type: jailbreak_detection
+        method: embedding_similarity
+        threshold: 0.85
+        action: block
+      - type: token_budget
+        max_input_tokens: 8000
+        action: block
+    output:
+      - type: toxicity
+        threshold: 0.7
+        action: block
+
+  token_economics:
+    track_by: [model, agent_name, team, environment]
+    budgets:
+      daily_max_cost: 2000.00
+      per_query_max_tokens: 16000
+      per_query_max_cost: 1.00
+    alerts:
+      daily_cost_threshold: 1500.00
+      cost_per_query_trend_increase_pct: 25
+
+agentops:
+  enabled: true
+
+  tracing:
+    backend: otlp
+    otlp_endpoint: ${OTLP_ENDPOINT}
+    sample_rate: 1.0
+    export_format: protobuf
+    retention_days: 90
+    auto_instrument:
+      langgraph: true
+      semantic_kernel: true
+      crewai: true
+      google_adk: true
+
+  tool_audit:
+    permissions:
+      # Customer support team
+      support_orchestrator:
+        allowed: [delegate, kb_search, ticket_create, escalate]
+        blocked: [payment_execute, refund_execute]
+      support_specialist:
+        allowed: [kb_search, account_lookup, ticket_update]
+        blocked: [payment_execute, refund_execute, customer_delete]
+
+      # Sales team
+      sales_research_agent:
+        allowed: [crm_read, web_search, linkedin_lookup, email_draft]
+        blocked: [crm_write, email_send, contract_sign]
+      sales_followup_agent:
+        allowed: [crm_read, calendar_read, email_draft]
+        blocked: [crm_write, email_send, contract_sign]
+
+      # Operations team
+      ops_runbook_agent:
+        allowed: [logs_search, metric_query, runbook_lookup, ticket_create]
+        blocked: [config_write, deploy_execute, infra_modify]
+      ops_remediation_agent:
+        allowed: [logs_search, runbook_execute_dry_run, ticket_create]
+        blocked: [config_write, deploy_execute, infra_modify]
+    parameter_validation: true
+    rate_limits:
+      default: 100/min
+      kb_search: 200/min
+      crm_read: 60/min
+    replay:
+      enabled: true
+      storage: local
+
+  safety:
+    loop_detection:
+      max_iterations: 50
+      max_repeated_tool_calls: 5
+      max_delegation_depth: 5
+      thrash_window: 10
+    budget:
+      max_tokens_per_run: 50000
+      max_cost_per_run: 5.00
+      max_time_per_run: 300s
+      max_tool_calls_per_run: 30
+      on_exceeded: graceful_stop
+    escalation:
+      triggers:
+        - condition: confidence_below
+          threshold: 0.4
+          action: human_handoff
+        - condition: consecutive_tool_failures
+          threshold: 3
+          action: human_handoff
+        - condition: sensitive_data_detected
+          action: human_approval
+    sandbox:
+      destructive_ops: [write, delete, execute, transfer]
+      mode: approve_first
+
+  agent_registry:
+    backend: local
+    capability_manifest: true
+    health_check_interval: 30s
+    a2a:
+      protocol: a2a_v1
+      discovery: registry
+
+  multi_agent:
+    delegation_tracking: true
+    consensus:
+      enabled: true
+      min_agreement: 0.67
+      conflict_action: escalate
+    bottleneck_detection:
+      latency_percentile: p95
+      threshold_ms: 5000
+
+  evaluation:
+    golden_datasets:
+      path: tests/golden/agents/
+      run_on: [version_change, daily]
+    task_completion:
+      track_by: [agent, task_type, team]
+      min_success_rate: 0.85
+    trajectory:
+      compare_against: optimal
+      penalty_per_extra_step: 0.05
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#agent-platform-alerts"
+    - type: teams
+      webhook_url: ${TEAMS_WEBHOOK_URL}
+    - type: pagerduty
+      routing_key: ${PD_ROUTING_KEY}
+  policies:
+    cooldown: 30m
+    rate_limit_per_hour: 120
+    escalation:
+      - after: 0m
+        channels: [slack]
+        severity: [warning, high, critical]
+      - after: 15m
+        channels: [slack, teams]
+        severity: [high, critical]
+      - after: 1h
+        channels: [slack, teams, pagerduty]
+        severity: [critical]
+
+audit:
+  storage: local
+  path: ./demo/audit/platform/
+  retention_days: 1825              # 5 years
+  log_predictions: true
+  compliance_frameworks: [eu_ai_act, soc2, iso_42001]

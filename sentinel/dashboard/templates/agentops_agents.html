@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block page_title %}Agents{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h2 class="font-semibold text-slate-900">Agent registry</h2>
+    <p class="text-xs text-slate-500 mt-1">{{ data.agents|length }} agents</p>
+  </div>
+
+  {% if not data.enabled %}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center text-sm text-slate-400">
+      AgentOps is disabled in this configuration
+    </div>
+  {% else %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% for a in data.agents %}
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between">
+            <div class="font-semibold">{{ a.name }}</div>
+            <span class="text-xs text-slate-500">{{ a.versions|length }} versions</span>
+          </div>
+          <div class="mt-3 space-y-2">
+            {% for v in a.versions %}
+              <div class="text-xs">
+                <div class="font-mono">v{{ v.version }}</div>
+                {% if v.description %}<div class="text-slate-500">{{ v.description }}</div>{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% else %}
+        <div class="col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center text-sm text-slate-400">
+          no agents registered
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

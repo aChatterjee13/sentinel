@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block page_title %}Audit{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h2 class="font-semibold text-slate-900">Audit trail</h2>
+    <p class="text-xs text-slate-500 mt-1">{{ data.total }} events shown</p>
+    <form method="get" class="grid grid-cols-1 md:grid-cols-5 gap-3 mt-4">
+      <div>
+        <label class="text-xs text-slate-500">Event type</label>
+        <select name="event_type" class="w-full mt-1 text-sm border border-slate-200 rounded px-2 py-1.5">
+          <option value="">all</option>
+          {% for t in data.distinct_event_types %}
+            <option value="{{ t }}" {% if data.filters.event_type == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">Model name</label>
+        <input name="model_name" value="{{ data.filters.model_name or '' }}"
+               class="w-full mt-1 text-sm border border-slate-200 rounded px-2 py-1.5"/>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">Since (ISO)</label>
+        <input name="since" value="{{ data.filters.since or '' }}"
+               class="w-full mt-1 text-sm border border-slate-200 rounded px-2 py-1.5"/>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">Until (ISO)</label>
+        <input name="until" value="{{ data.filters.until or '' }}"
+               class="w-full mt-1 text-sm border border-slate-200 rounded px-2 py-1.5"/>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">Limit</label>
+        <input name="limit" type="number" value="{{ data.filters.limit }}"
+               class="w-full mt-1 text-sm border border-slate-200 rounded px-2 py-1.5"/>
+      </div>
+      <div class="md:col-span-5">
+        <button type="submit" class="text-xs px-4 py-1.5 rounded bg-sentinel-500 text-white hover:bg-sentinel-600">Apply</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+          <tr>
+            <th class="text-left px-5 py-2">Timestamp</th>
+            <th class="text-left px-5 py-2">Type</th>
+            <th class="text-left px-5 py-2">Model</th>
+            <th class="text-left px-5 py-2">Version</th>
+            <th class="text-left px-5 py-2">Actor</th>
+            <th class="text-left px-5 py-2">Payload</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for ev in data.events %}
+            <tr class="hover:bg-slate-50">
+              <td class="px-5 py-2 font-mono text-xs text-slate-600">{{ ev.timestamp }}</td>
+              <td class="px-5 py-2 font-mono text-xs">{{ ev.event_type }}</td>
+              <td class="px-5 py-2">{{ ev.model_name or '-' }}</td>
+              <td class="px-5 py-2 font-mono text-xs">{{ ev.model_version or '-' }}</td>
+              <td class="px-5 py-2 text-xs">{{ ev.actor or '-' }}</td>
+              <td class="px-5 py-2">
+                <details class="text-xs">
+                  <summary class="cursor-pointer text-sentinel-600">show</summary>
+                  <pre class="mt-1 text-xs bg-slate-50 p-2 rounded overflow-x-auto">{{ ev.payload | tojson }}</pre>
+                </details>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6" class="px-5 py-6 text-center text-sm text-slate-400">no events match these filters</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

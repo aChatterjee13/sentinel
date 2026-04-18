@@ -1,0 +1,146 @@
+version: "1.0"
+
+# AgentOps example: a multi-agent insurance underwriting workflow with
+# orchestrator + specialist agents. Full tracing, tool audit, budget
+# enforcement, escalation, and golden-suite evaluation.
+
+model:
+  name: underwriting_agents
+  type: generation
+  domain: tabular
+  description: "Multi-agent underwriting pipeline (orchestrator + specialists)."
+
+drift:
+  data:
+    method: psi
+    threshold: 0.2
+
+llmops:
+  enabled: true
+  mode: agent
+  guardrails:
+    input:
+      - type: pii_detection
+        action: redact
+      - type: jailbreak_detection
+        action: block
+    output:
+      - type: toxicity
+        threshold: 0.7
+        action: block
+
+agentops:
+  enabled: true
+
+  tracing:
+    backend: local
+    sample_rate: 1.0
+    export_format: json
+    retention_days: 90
+    auto_instrument:
+      langgraph: true
+      semantic_kernel: true
+      crewai: false
+      google_adk: false
+
+  tool_audit:
+    permissions:
+      orchestrator:
+        allowed: [delegate, summarise, escalate]
+        blocked: [payment_execute]
+      risk_assessment_agent:
+        allowed: [risk_database, actuarial_tables, document_ocr]
+        blocked: [payment_execute, customer_delete]
+      pricing_agent:
+        allowed: [pricing_engine, competitor_lookup]
+        blocked: [payment_execute, customer_delete]
+      compliance_agent:
+        allowed: [policy_lookup, regulatory_check]
+        blocked: [payment_execute, customer_delete]
+    parameter_validation: true
+    rate_limits:
+      default: 100/min
+      pricing_engine: 30/min
+    replay:
+      enabled: true
+      storage: local
+
+  safety:
+    loop_detection:
+      max_iterations: 50
+      max_repeated_tool_calls: 5
+      max_delegation_depth: 5
+      thrash_window: 10
+    budget:
+      max_tokens_per_run: 50000
+      max_cost_per_run: 5.00
+      max_time_per_run: 300s
+      max_tool_calls_per_run: 30
+      on_exceeded: graceful_stop
+    escalation:
+      triggers:
+        - condition: confidence_below
+          threshold: 0.3
+          action: human_handoff
+        - condition: consecutive_tool_failures
+          threshold: 3
+          action: human_handoff
+        - condition: regulatory_context
+          patterns: [financial_advice, legal_opinion]
+          action: human_approval
+    sandbox:
+      destructive_ops: [write, delete, execute, transfer]
+      mode: approve_first
+
+  agent_registry:
+    backend: local
+    capability_manifest: true
+    health_check_interval: 60s
+    a2a:
+      protocol: a2a_v1
+      discovery: registry
+
+  multi_agent:
+    delegation_tracking: true
+    consensus:
+      enabled: true
+      min_agreement: 0.67
+      conflict_action: escalate
+    bottleneck_detection:
+      latency_percentile: p95
+      threshold_ms: 5000
+
+  evaluation:
+    golden_datasets:
+      path: tests/golden/underwriting/
+      run_on: [version_change, daily]
+    task_completion:
+      track_by: [agent, task_type]
+      min_success_rate: 0.85
+    trajectory:
+      compare_against: optimal
+      penalty_per_extra_step: 0.05
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#agentops-alerts"
+    - type: pagerduty
+      routing_key: ${PD_ROUTING_KEY}
+  policies:
+    cooldown: 30m
+    escalation:
+      - after: 0m
+        channels: [slack]
+        severity: [high, critical]
+      - after: 10m
+        channels: [slack, pagerduty]
+        severity: [critical]
+
+audit:
+  storage: azure_blob
+  path: agentops/underwriting/
+  retention_days: 2555
+  log_predictions: true
+  compliance_frameworks: [fca_consumer_duty, eu_ai_act]

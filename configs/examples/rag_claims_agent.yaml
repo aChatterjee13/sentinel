@@ -1,0 +1,113 @@
+version: "1.0"
+
+# LLMOps example: a RAG pipeline answering claims questions over policy
+# documents. Demonstrates input/output guardrails, response quality scoring,
+# semantic drift detection, and token economics.
+
+model:
+  name: claims_qa_rag
+  type: generation
+  domain: tabular  # base SDK domain — LLMOps owns the LLM-specific bits
+  description: "RAG pipeline for answering customer claims questions."
+
+drift:
+  data:
+    method: psi
+    threshold: 0.2
+
+llmops:
+  enabled: true
+  mode: rag
+
+  prompts:
+    registry_backend: local
+    versioning: semantic
+    ab_testing:
+      enabled: true
+      default_split: [90, 10]
+
+  guardrails:
+    input:
+      - type: pii_detection
+        action: redact
+        entities: [person, ssn, account_number, email, phone]
+        redaction_strategy: mask
+      - type: jailbreak_detection
+        method: embedding_similarity
+        threshold: 0.85
+        action: block
+      - type: topic_fence
+        allowed_topics: [insurance_claims, policy_coverage, underwriting]
+        action: warn
+      - type: token_budget
+        max_input_tokens: 4000
+        action: block
+    output:
+      - type: toxicity
+        threshold: 0.7
+        action: block
+      - type: groundedness
+        method: nli
+        min_score: 0.6
+        action: warn
+      - type: regulatory_language
+        prohibited_phrases_file: compliance/prohibited_terms.yaml
+        action: block
+
+  quality:
+    evaluator:
+      method: llm_judge
+      judge_model: gpt-4o-mini
+      rubrics:
+        relevance: {weight: 0.3, scale: 5}
+        completeness: {weight: 0.3, scale: 5}
+        clarity: {weight: 0.2, scale: 5}
+        safety: {weight: 0.2, scale: 5}
+      sample_rate: 0.1
+    semantic_drift:
+      embedding_model: text-embedding-3-small
+      window: 7d
+      threshold: 0.15
+    retrieval_quality:
+      track: [relevance, chunk_utilisation, faithfulness, answer_coverage]
+      min_relevance: 0.5
+      min_faithfulness: 0.7
+
+  token_economics:
+    track_by: [model, prompt_version, user_segment]
+    budgets:
+      daily_max_cost: 500.00
+      per_query_max_tokens: 8000
+      per_query_max_cost: 0.50
+    alerts:
+      daily_cost_threshold: 400.00
+      cost_per_query_trend_increase_pct: 20
+    pricing:
+      gpt-4o:
+        input: 0.0025
+        output: 0.01
+      gpt-4o-mini:
+        input: 0.00015
+        output: 0.0006
+
+  prompt_drift:
+    detection_window: 7d
+    signals:
+      quality_score_decline: 0.1
+      guardrail_violation_rate_increase: 0.05
+      token_usage_increase_pct: 25
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#llmops-alerts"
+  policies:
+    cooldown: 1h
+
+audit:
+  storage: azure_blob
+  path: llmops/audit/
+  retention_days: 2555
+  log_predictions: true
+  compliance_frameworks: [eu_ai_act]

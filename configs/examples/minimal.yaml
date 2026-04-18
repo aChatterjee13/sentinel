@@ -1,0 +1,27 @@
+version: "1.0"
+
+# The bare minimum config Sentinel needs to start monitoring a model.
+# Drop this in `sentinel.yaml`, set SLACK_WEBHOOK_URL, and you're live.
+
+model:
+  name: hello_world_model
+  type: classification
+  domain: tabular
+
+drift:
+  data:
+    method: psi
+    threshold: 0.2
+    window: 7d
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#ml-alerts"
+  policies:
+    cooldown: 1h
+
+audit:
+  storage: local
+  path: ./audit/

@@ -1,0 +1,179 @@
+version: "1.0"
+
+# ─────────────────────────────────────────────────────────────────────
+# DEMO CONFIG — Healthcare provider, clinical decision support agent
+# Playbook C: The careful healthcare adopter
+#
+# Talking points for this config:
+#   - HIPAA-friendly: PHI redaction before any LLM call
+#   - Human-in-the-loop required for any clinical recommendation
+#   - Hard kill switch on agent loops (50 step ceiling)
+#   - Approve-first sandbox for any write operation
+#   - Full reasoning trace stored for medical-legal review
+# ─────────────────────────────────────────────────────────────────────
+
+model:
+  name: clinical_decision_support
+  type: generation
+  domain: tabular
+  description: "Multi-agent clinical decision support — triage + evidence retrieval"
+
+drift:
+  data:
+    method: psi
+    threshold: 0.2
+
+llmops:
+  enabled: true
+  mode: agent
+
+  guardrails:
+    input:
+      - type: pii_detection
+        action: redact
+        entities: [person, ssn, mrn, dob, phone, email, address]
+        redaction_strategy: hash
+      - type: jailbreak_detection
+        method: hybrid
+        threshold: 0.85
+        action: block
+      - type: topic_fence
+        allowed_topics: [clinical_triage, evidence_retrieval, drug_interactions, care_pathway]
+        action: block
+      - type: token_budget
+        max_input_tokens: 6000
+        action: block
+    output:
+      - type: toxicity
+        threshold: 0.5
+        action: block
+      - type: groundedness
+        method: nli
+        min_score: 0.75
+        action: block
+      - type: regulatory_language
+        prohibited_phrases_file: compliance/clinical_prohibited.yaml
+        action: block
+
+  quality:
+    evaluator:
+      method: llm_judge
+      judge_model: gpt-4o-mini
+      rubrics:
+        clinical_accuracy: {weight: 0.5, scale: 5}
+        evidence_grounding: {weight: 0.3, scale: 5}
+        safety: {weight: 0.2, scale: 5}
+      sample_rate: 0.25
+
+agentops:
+  enabled: true
+
+  tracing:
+    backend: local
+    sample_rate: 1.0          # trace EVERY clinical run — no sampling
+    export_format: json
+    retention_days: 2555      # 7 years for medical records
+    auto_instrument:
+      langgraph: true
+      semantic_kernel: true
+      crewai: false
+      google_adk: false
+
+  tool_audit:
+    permissions:
+      triage_agent:
+        allowed: [symptom_lookup, vital_signs_read, ehr_read]
+        blocked: [ehr_write, prescription_write, order_lab, schedule_procedure]
+      evidence_agent:
+        allowed: [pubmed_search, drug_database, guidelines_lookup, clinical_trials_db]
+        blocked: [ehr_write, prescription_write]
+      orchestrator:
+        allowed: [delegate, summarise, escalate_to_clinician]
+        blocked: [ehr_write, prescription_write]
+    parameter_validation: true
+    rate_limits:
+      default: 60/min
+    replay:
+      enabled: true
+      storage: local
+
+  safety:
+    loop_detection:
+      max_iterations: 30          # tighter than default — clinical context
+      max_repeated_tool_calls: 3
+      max_delegation_depth: 4
+      thrash_window: 8
+    budget:
+      max_tokens_per_run: 30000
+      max_cost_per_run: 2.00
+      max_time_per_run: 180s
+      max_tool_calls_per_run: 20
+      on_exceeded: escalate       # never silently stop in clinical context
+    escalation:
+      triggers:
+        - condition: confidence_below
+          threshold: 0.70           # high bar — clinical
+          action: human_handoff
+        - condition: consecutive_tool_failures
+          threshold: 2
+          action: human_handoff
+        - condition: sensitive_data_detected
+          action: human_approval
+        - condition: regulatory_context
+          patterns: [drug_interaction, dosing_recommendation, differential_diagnosis]
+          action: human_approval
+    sandbox:
+      destructive_ops: [write, delete, execute, transfer, prescribe, order]
+      mode: approve_first
+
+  agent_registry:
+    backend: local
+    capability_manifest: true
+    health_check_interval: 60s
+
+  multi_agent:
+    delegation_tracking: true
+    consensus:
+      enabled: true
+      min_agreement: 1.0          # unanimous for clinical decisions
+      conflict_action: escalate
+    bottleneck_detection:
+      latency_percentile: p95
+      threshold_ms: 8000
+
+  evaluation:
+    golden_datasets:
+      path: tests/golden/clinical/
+      run_on: [version_change, daily]
+    task_completion:
+      track_by: [agent, task_type]
+      min_success_rate: 0.95      # high bar
+    trajectory:
+      compare_against: optimal
+      penalty_per_extra_step: 0.10
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#clinical-ai-alerts"
+    - type: pagerduty
+      routing_key: ${PD_ROUTING_KEY}
+  policies:
+    cooldown: 15m
+    rate_limit_per_hour: 100
+    escalation:
+      - after: 0m
+        channels: [slack]
+        severity: [warning, high, critical]
+      - after: 5m
+        channels: [slack, pagerduty]
+        severity: [high, critical]
+
+audit:
+  storage: local
+  path: ./demo/audit/healthcare/
+  retention_days: 2555            # 7 years — medical records retention
+  log_predictions: true
+  log_explanations: true
+  compliance_frameworks: [hipaa, eu_ai_act, fda_samd]

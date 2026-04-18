@@ -1,0 +1,320 @@
+version: "1.0"
+
+# ─────────────────────────────────────────────────────────────────────
+# SHOWCASE CONFIG — Full-stack demo covering every Sentinel capability
+#
+# This config enables ALL subsystems simultaneously so the dashboard
+# can show every page fully populated:
+#   - Tabular model drift (PSI + DDM concept drift)
+#   - Count-based auto-check + streaming concept drift
+#   - Data quality, feature health, cost monitoring
+#   - LLMOps guardrails, token economics, prompt management
+#   - AgentOps tracing, tool audit, safety rails
+#   - Notification escalation chains
+#   - Retrain orchestrator with auto-deploy
+#   - Model registry, audit trail, compliance
+#   - Business KPI linkage + model dependency graph
+# ─────────────────────────────────────────────────────────────────────
+
+model:
+  name: fraud_classifier_v4
+  type: classification
+  framework: xgboost
+  version: "4.1.0"
+  domain: tabular
+  description: "Insurance claims fraud classifier — full showcase"
+
+data_quality:
+  schema:
+    enforce: true
+  freshness:
+    max_age_hours: 24
+  outlier_detection:
+    method: isolation_forest
+    contamination: 0.05
+  null_threshold: 0.05
+  duplicate_threshold: 0.02
+
+drift:
+  data:
+    method: psi
+    threshold: 0.2
+    window: 7d
+    reference: baseline
+    features:
+      include: all
+      exclude: [claim_id, timestamp]
+  concept:
+    method: ddm
+    warning_level: 2.0
+    drift_level: 3.0
+    min_samples: 50
+    requires_actuals: true
+  model:
+    metrics: [accuracy, f1, auc]
+    threshold:
+      accuracy: 0.05
+      f1: 0.08
+      auc: 0.05
+    evaluation_window: 500
+  auto_check:
+    enabled: true
+    every_n_predictions: 200
+
+feature_health:
+  importance_method: shap
+  alert_on_top_n_drift: 3
+  recalculate_importance: weekly
+
+alerts:
+  channels:
+    - type: slack
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#ml-showcase-alerts"
+    - type: teams
+      webhook_url: ${TEAMS_WEBHOOK_URL}
+    - type: pagerduty
+      routing_key: ${PD_ROUTING_KEY}
+      severity_mapping:
+        critical: critical
+        high: error
+  policies:
+    cooldown: 1h
+    rate_limit_per_hour: 60
+    escalation:
+      - after: 0m
+        channels: [slack]
+        severity: [warning, high, critical]
+      - after: 30m
+        channels: [slack, teams]
+        severity: [high, critical]
+      - after: 2h
+        channels: [slack, teams, pagerduty]
+        severity: [critical]
+
+retraining:
+  trigger: drift_confirmed
+  pipeline: local://retrain_fraud_classifier
+  deploy_on_promote: true
+  approval:
+    mode: human_in_loop
+    approvers: [ml-team@company.example]
+    auto_promote_if:
+      metric: f1
+      improvement_pct: 2.0
+    timeout: 48h
+  validation:
+    min_performance:
+      accuracy: 0.85
+      f1: 0.80
+
+deployment:
+  strategy: canary
+  canary:
+    initial_traffic_pct: 5
+    ramp_steps: [5, 25, 50, 100]
+    ramp_interval: 1h
+    rollback_on:
+      error_rate_increase: 0.02
+      latency_p99_increase_ms: 50
+  target: local
+
+cost_monitor:
+  track:
+    - inference_latency_ms
+    - throughput_rps
+    - cost_per_prediction
+    - compute_utilisation_pct
+  alert_thresholds:
+    latency_p99_ms: 200
+    cost_per_1k_predictions: 5.00
+
+business_kpi:
+  mappings:
+    - model_metric: precision
+      business_kpi: fraud_catch_rate
+    - model_metric: recall
+      business_kpi: legitimate_claims_approved
+    - model_metric: f1
+      business_kpi: overall_decision_quality
+
+llmops:
+  enabled: true
+  mode: rag
+
+  prompts:
+    registry_backend: local
+    versioning: semantic
+    ab_testing:
+      enabled: true
+      default_split: [90, 10]
+
+  guardrails:
+    input:
+      - type: pii_detection
+        action: redact
+        entities: [person, ssn, account_number, email, phone]
+        redaction_strategy: mask
+      - type: jailbreak_detection
+        method: embedding_similarity
+        threshold: 0.85
+        action: block
+      - type: topic_fence
+        allowed_topics: [insurance_claims, policy_coverage, underwriting, billing]
+        action: warn
+      - type: token_budget
+        max_input_tokens: 4000
+        action: block
+    output:
+      - type: toxicity
+        threshold: 0.7
+        action: block
+      - type: groundedness
+        method: nli
+        min_score: 0.6
+        action: warn
+
+  quality:
+    evaluator:
+      method: llm_judge
+      judge_model: gpt-4o-mini
+      rubrics:
+        relevance: {weight: 0.3, scale: 5}
+        completeness: {weight: 0.3, scale: 5}
+        clarity: {weight: 0.2, scale: 5}
+        safety: {weight: 0.2, scale: 5}
+      sample_rate: 0.1
+    semantic_drift:
+      embedding_model: text-embedding-3-small
+      window: 7d
+      threshold: 0.15
+    retrieval_quality:
+      track: [relevance, chunk_utilisation, faithfulness, answer_coverage]
+      min_relevance: 0.5
+      min_faithfulness: 0.7
+
+  token_economics:
+    track_by: [model, prompt_version, use_case]
+    budgets:
+      daily_max_cost: 500.00
+      per_query_max_tokens: 8000
+      per_query_max_cost: 0.50
+    alerts:
+      daily_cost_threshold: 400.00
+      cost_per_query_trend_increase_pct: 20
+
+  prompt_drift:
+    detection_window: 7d
+    signals:
+      quality_score_decline: 0.10
+      guardrail_violation_rate_increase: 0.05
+      token_usage_increase_pct: 25
+
+agentops:
+  enabled: true
+
+  tracing:
+    backend: local
+    sample_rate: 1.0
+    export_format: json
+    retention_days: 90
+    auto_instrument:
+      langgraph: true
+      semantic_kernel: true
+      crewai: false
+      google_adk: true
+
+  tool_audit:
+    permissions:
+      claims_processor:
+        allowed: [policy_search, coverage_extract, llm_summarise, document_ocr]
+        blocked: [payment_execute, customer_delete]
+      fraud_investigator:
+        allowed: [claims_db, risk_score, sanctions_check, report_generate]
+        blocked: [payment_execute, account_modify]
+      underwriting_agent:
+        allowed: [risk_database, actuarial_tables, document_ocr, pricing_engine]
+        blocked: [payment_execute, customer_delete]
+    parameter_validation: true
+    rate_limits:
+      default: 100/min
+      payment_execute: 5/min
+      database_write: 20/min
+    replay:
+      enabled: true
+      storage: local
+
+  safety:
+    loop_detection:
+      max_iterations: 50
+      max_repeated_tool_calls: 5
+      max_delegation_depth: 5
+      thrash_window: 10
+    budget:
+      max_tokens_per_run: 50000
+      max_cost_per_run: 5.00
+      max_time_per_run: 300s
+      max_tool_calls_per_run: 30
+      on_exceeded: graceful_stop
+    escalation:
+      triggers:
+        - condition: confidence_below
+          threshold: 0.3
+          action: human_handoff
+        - condition: consecutive_tool_failures
+          threshold: 3
+          action: human_handoff
+        - condition: sensitive_data_detected
+          action: human_approval
+    sandbox:
+      destructive_ops: [write, delete, execute, transfer]
+      mode: approve_first
+
+  agent_registry:
+    backend: local
+    capability_manifest: true
+    health_check_interval: 60s
+    a2a:
+      protocol: a2a_v1
+      discovery: registry
+
+  multi_agent:
+    delegation_tracking: true
+    consensus:
+      enabled: true
+      min_agreement: 0.67
+      conflict_action: escalate
+    bottleneck_detection:
+      latency_percentile: p95
+      threshold_ms: 5000
+
+  evaluation:
+    golden_datasets:
+      path: tests/golden/
+      run_on: [version_change, daily]
+    task_completion:
+      track_by: [agent, task_type]
+      min_success_rate: 0.85
+    trajectory:
+      compare_against: optimal
+      penalty_per_extra_step: 0.05
+
+audit:
+  storage: local
+  path: ./demo/audit/showcase/
+  retention_days: 2555
+  log_predictions: true
+  log_explanations: true
+  compliance_frameworks: [fca_consumer_duty, eu_ai_act, gdpr, soc2]
+
+model_graph:
+  dependencies:
+    - upstream: feature_engineering_pipeline
+      downstream: fraud_classifier_v4
+    - upstream: fraud_classifier_v4
+      downstream: auto_adjudication_engine
+    - upstream: fraud_classifier_v4
+      downstream: claims_priority_router
+    - upstream: claims_priority_router
+      downstream: settlement_calculator
+  cascade_alerts: true

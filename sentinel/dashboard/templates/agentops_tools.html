@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block page_title %}Tools{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h2 class="font-semibold text-slate-900">Tool audit</h2>
+    <p class="text-xs text-slate-500 mt-1">{{ data.tools|length }} tools observed</p>
+  </div>
+
+  {% if not data.enabled %}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center text-sm text-slate-400">
+      AgentOps is disabled in this configuration
+    </div>
+  {% else %}
+    <!-- Tool success/failure chart -->
+    {% if data.tools %}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+      <h3 class="font-semibold text-slate-900 mb-2">Tool success vs failure rates</h3>
+      <p class="text-xs text-slate-500 mb-3">Green = successful calls, red = failures</p>
+      <div class="h-72" data-chart="tool-success-rates"></div>
+    </div>
+    {% endif %}
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+            <tr>
+              <th class="text-left px-5 py-2">Tool</th>
+              <th class="text-right px-5 py-2">Calls</th>
+              <th class="text-right px-5 py-2">Successes</th>
+              <th class="text-right px-5 py-2">Failures</th>
+              <th class="text-right px-5 py-2">Success rate</th>
+              <th class="text-right px-5 py-2">Avg latency</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for tool, stats in data.tools.items() %}
+              {% set total = stats.get('total_calls', stats.get('calls', 0)) %}
+              {% set successes = stats.get('successes', 0) %}
+              {% set rate = (successes / total * 100) if total > 0 else 0 %}
+              <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-5 py-2 font-mono text-xs">{{ tool }}</td>
+                <td class="px-5 py-2 text-right">{{ total }}</td>
+                <td class="px-5 py-2 text-right text-emerald-600">{{ successes }}</td>
+                <td class="px-5 py-2 text-right text-red-600">{{ stats.get('failures', 0) }}</td>
+                <td class="px-5 py-2 text-right">
+                  <span class="{{ 'text-emerald-600' if rate >= 95 else 'text-amber-600' if rate >= 80 else 'text-red-600' }}">
+                    {{ "%.0f"|format(rate) }}%
+                  </span>
+                </td>
+                <td class="px-5 py-2 text-right">{{ "%.0f"|format(stats.get('avg_latency_ms', 0) or 0) }}ms</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="6" class="px-5 py-6 text-center text-sm text-slate-400">no tool calls observed</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

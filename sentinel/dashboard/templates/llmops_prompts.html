@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block page_title %}Prompts{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <h2 class="font-semibold text-slate-900">Prompt registry</h2>
+    <p class="text-xs text-slate-500 mt-1">{{ data.prompts|length }} prompt{{ '' if data.prompts|length == 1 else 's' }} registered</p>
+  </div>
+
+  {% if not data.enabled %}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center text-sm text-slate-400">
+      LLMOps is disabled in this configuration
+    </div>
+  {% else %}
+    {% for p in data.prompts %}
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+          <h3 class="font-semibold text-slate-900">{{ p.name }}</h3>
+          <span class="text-xs text-slate-500">{{ p.versions|length }} versions</span>
+        </div>
+        <div class="divide-y divide-slate-100">
+          {% for v in p.versions %}
+            <div class="px-5 py-3 text-sm">
+              <div class="flex items-center justify-between">
+                <div class="font-mono text-xs">v{{ v.version }}</div>
+                <div class="text-xs text-slate-500">{{ v.created_at or '' }}</div>
+              </div>
+              {% if v.system_prompt %}
+                <div class="mt-2 text-xs text-slate-500">system prompt</div>
+                <pre class="mt-1 text-xs bg-slate-50 p-2 rounded overflow-x-auto whitespace-pre-wrap">{{ v.system_prompt }}</pre>
+              {% endif %}
+              {% if v.template %}
+                <div class="mt-2 text-xs text-slate-500">template</div>
+                <pre class="mt-1 text-xs bg-slate-50 p-2 rounded overflow-x-auto whitespace-pre-wrap">{{ v.template }}</pre>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center text-sm text-slate-400">
+        no prompts registered
+      </div>
+    {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

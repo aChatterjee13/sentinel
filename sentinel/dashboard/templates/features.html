@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block page_title %}Feature health{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="font-semibold text-slate-900">Feature health</h2>
+        <p class="text-xs text-slate-500 mt-1">{{ data.summary }}</p>
+      </div>
+      <div class="text-xs text-slate-500">buffer: {{ data.buffer_size }}</div>
+    </div>
+  </div>
+
+  {% if not data.available %}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-10 text-center text-sm text-slate-400">
+      {% if data.error %}
+        <div class="text-red-500">{{ data.error }}</div>
+      {% else %}
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto mb-3 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+        feature health appears once predictions are buffered
+      {% endif %}
+    </div>
+  {% else %}
+    {% if data.top_n_drifted %}
+      <div class="bg-red-50 rounded-xl shadow-sm border border-red-200 p-5">
+        <h3 class="font-semibold text-red-900 mb-2">⚠ Top drifted features</h3>
+        <div class="flex flex-wrap gap-2">
+          {% for name in data.top_n_drifted %}
+            <span class="px-2.5 py-1 text-xs rounded-full bg-red-100 text-red-700 border border-red-200 font-medium">{{ name }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- Feature importance chart -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+      <h3 class="font-semibold text-slate-900 mb-2">Feature importance vs drift</h3>
+      <p class="text-xs text-slate-500 mb-3">Top features ranked by importance. Red bars indicate drifted features.</p>
+      <div class="h-80" data-chart="feature-importance"></div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+      <div class="px-5 py-3 border-b border-slate-200">
+        <h2 class="font-semibold text-slate-900">All features</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+            <tr>
+              <th class="text-left px-5 py-2">Feature</th>
+              <th class="text-right px-5 py-2">Importance</th>
+              <th class="text-right px-5 py-2">Drift score</th>
+              <th class="text-right px-5 py-2">Null %</th>
+              <th class="text-left px-5 py-2">Severity</th>
+              <th class="text-left px-5 py-2">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for f in data.features %}
+              <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-5 py-2 font-mono text-xs">{{ f.name }}</td>
+                <td class="px-5 py-2 text-right">{{ "%.3f"|format(f.importance) }}</td>
+                <td class="px-5 py-2 text-right">
+                  <span class="{{ 'text-red-600 font-medium' if f.drift_score > 0.2 else '' }}">{{ "%.3f"|format(f.drift_score) }}</span>
+                </td>
+                <td class="px-5 py-2 text-right">{{ "%.1f"|format((f.null_rate or 0) * 100) }}%</td>
+                <td class="px-5 py-2">
+                  <span class="px-2 py-0.5 text-xs rounded-full
+                    {% if f.severity == 'critical' %}bg-red-100 text-red-700
+                    {% elif f.severity == 'high' %}bg-orange-100 text-orange-700
+                    {% elif f.severity == 'medium' %}bg-amber-100 text-amber-700
+                    {% else %}bg-slate-100 text-slate-600{% endif %}">
+                    {{ f.severity }}
+                  </span>
+                </td>
+                <td class="px-5 py-2">
+                  {% if f.is_drifted %}
+                    <span class="flex items-center gap-1 text-red-600 font-medium">
+                      <span class="w-2 h-2 rounded-full bg-red-500"></span> drifted
+                    </span>
+                  {% else %}
+                    <span class="flex items-center gap-1 text-emerald-600">
+                      <span class="w-2 h-2 rounded-full bg-emerald-500"></span> stable
+                    </span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
